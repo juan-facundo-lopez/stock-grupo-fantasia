@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail } from 'lucide-react';
+import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'merch-tracker-v1';
@@ -442,6 +442,58 @@ function Field({ label, children }) {
   );
 }
 
+function MockupUploadField({ value, onChange }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const inputId = useRef(`mockup-upload-${uid()}`).current;
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!supabase) {
+      setError('Subida de imágenes requiere Supabase conectado.');
+      return;
+    }
+    setUploading(true);
+    setError('');
+    try {
+      const path = `${Date.now()}-${uid()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
+      const { error: upErr } = await supabase.storage.from('mockups').upload(path, file, { cacheControl: '3600', upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('mockups').getPublicUrl(path);
+      onChange(pub.publicUrl);
+    } catch (err) {
+      setError('No se pudo subir la imagen. ¿Creaste el bucket "mockups" en Supabase?');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Field label="Mockup / imagen">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {value ? (
+          <div style={{ position: 'relative' }}>
+            <img src={value} alt="mockup" style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #CFC6AC' }} />
+            <button type="button" onClick={() => onChange('')} className="icon-btn" style={{ position: 'absolute', top: -8, right: -8, background: '#FBF8EE', border: '1.4px solid #CFC6AC', borderRadius: '50%', padding: 2 }}>
+              <X size={10} />
+            </button>
+          </div>
+        ) : (
+          <ImageOff size={18} color="#8a8367" />
+        )}
+        <label htmlFor={inputId} className="mt-btn" style={{ cursor: 'pointer', fontSize: 12, padding: '7px 10px' }}>
+          {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+          {uploading ? 'Subiendo…' : value ? 'Cambiar' : 'Subir imagen'}
+        </label>
+        <input id={inputId} type="file" accept="image/*,application/pdf" onChange={handleFile} style={{ display: 'none' }} disabled={uploading} />
+      </div>
+      {error && <span className="mt-mono" style={{ fontSize: 10, color: '#C1442E', maxWidth: 160 }}>{error}</span>}
+    </Field>
+  );
+}
+
 function Productos({ products, stats, providers, onAdd, onRemove }) {
   const [form, setForm] = useState({ name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' });
   const submit = (e) => {
@@ -474,7 +526,7 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
           </Field>
           <Field label="Peso / medida"><input className="mt-input" style={{ width: 100 }} placeholder="ej. 250g" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></Field>
           <Field label="Uds. por paquete"><input className="mt-input" type="number" style={{ width: 100 }} value={form.unitsPerPackage} onChange={(e) => setForm({ ...form, unitsPerPackage: e.target.value })} /></Field>
-          <Field label="Mockup (link)"><input className="mt-input" style={{ width: 180 }} placeholder="https://..." value={form.mockupUrl} onChange={(e) => setForm({ ...form, mockupUrl: e.target.value })} /></Field>
+          <MockupUploadField value={form.mockupUrl} onChange={(url) => setForm({ ...form, mockupUrl: url })} />
           <button type="submit" className="mt-btn"><Plus size={14} /> Agregar</button>
         </form>
       </Card>
