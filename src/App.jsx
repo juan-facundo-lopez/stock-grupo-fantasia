@@ -1,14 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'merch-tracker-v1';
 
 const seedData = {
   products: [
-    { id: 'p1', name: 'Planchas', category: 'Merch', price: 2.75, invested: 1000, initialStock: 2000, lowStockThreshold: 50 },
-    { id: 'p2', name: 'Disfraces', category: 'Merch', price: 14.3, invested: 1008.45, initialStock: 160, lowStockThreshold: 15 },
-    { id: 'p3', name: 'Pines', category: 'Merch', price: 0, invested: 848.41, initialStock: 500, lowStockThreshold: 30 },
-    { id: 'p4', name: 'Vasos', category: 'Merch', price: 0, invested: 5299.8, initialStock: 1500, lowStockThreshold: 50 },
+    { id: 'p1', name: 'Planchas', category: 'Merch', price: 2.75, invested: 1000, initialStock: 2000, lowStockThreshold: 50, providerId: 'pr1', weight: '', unitsPerPackage: '', mockupUrl: '' },
+    { id: 'p2', name: 'Disfraces', category: 'Merch', price: 14.3, invested: 1008.45, initialStock: 160, lowStockThreshold: 15, providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' },
+    { id: 'p3', name: 'Pines', category: 'Merch', price: 0, invested: 848.41, initialStock: 500, lowStockThreshold: 30, providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' },
+    { id: 'p4', name: 'Vasos', category: 'Merch', price: 0, invested: 5299.8, initialStock: 1500, lowStockThreshold: 50, providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' },
+  ],
+  providers: [
+    { id: 'pr1', name: 'Gráfica Planchas SRL', email: 'pedidos@graficaplanchas.example', phone: '', notes: '' },
   ],
   locations: [
     { id: 'l1', name: 'Secretos', type: 'restaurante' },
@@ -43,6 +47,22 @@ const TYPE_META = {
 const euro = (n) => `€${(Number(n) || 0).toFixed(2)}`;
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+function buildOrderMailto(product, provider, qty) {
+  const subject = `Pedido de reposición: ${product.name}`;
+  const lines = [
+    `Hola${provider?.name ? ' ' + provider.name : ''},`,
+    '',
+    `Necesitamos reponer stock de "${product.name}".`,
+    `Cantidad solicitada: ${qty} unidades`,
+  ];
+  if (product.unitsPerPackage) lines.push(`Unidades por paquete: ${product.unitsPerPackage}`);
+  if (product.weight) lines.push(`Peso / medida: ${product.weight}`);
+  if (product.mockupUrl) lines.push('', `Mockup / referencia: ${product.mockupUrl}`);
+  lines.push('', 'Gracias!');
+  const body = lines.join('\n');
+  return `mailto:${provider?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 function computeStats(products, movements) {
   return products.map((p) => {
     const pm = movements.filter((m) => m.productId === p.id);
@@ -70,21 +90,76 @@ export default function MerchTracker() {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('dashboard');
   const [toast, setToast] = useState('');
+  const skipNextRealtime = useRef(false);
+
+  const cloudOn = !!supabase;
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      setData(raw ? JSON.parse(raw) : seedData);
-    } catch {
-      setData(seedData);
-    } finally {
-      setLoading(false);
-    }
+    (async () => {
+      if (supabase) {
+        try {
+          const { data: row, error } = await supabase.from('app_state').select('data').eq('id', 'main').maybeSingle();
+          if (error) throw error;
+          if (row && row.data && Object.keys(row.data).length > 0) {
+            setData(row.data);
+          } else {
+            await supabase.from('app_state').upsert({ id: 'main', data: seedData });
+            setData(seedData);
+          }
+        } catch {
+          setToast('No se pudo conectar con la base compartida. Usando datos locales.');
+          setTimeout(() => setToast(''), 5000);
+          setData(seedData);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        setData(raw ? JSON.parse(raw) : seedData);
+      } catch {
+        setData(seedData);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  const persist = useCallback((next) => {
+  // Escucha cambios que haga la otra persona en tiempo real
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel('app_state_changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.main' }, (payload) => {
+        if (skipNextRealtime.current) {
+          skipNextRealtime.current = false;
+          return;
+        }
+        if (payload.new?.data) setData(payload.new.data);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const persist = useCallback(async (next) => {
     setData(next);
     setSaving(true);
+    if (supabase) {
+      skipNextRealtime.current = true;
+      try {
+        const { error } = await supabase.from('app_state').upsert({ id: 'main', data: next, updated_at: new Date().toISOString() });
+        if (error) throw error;
+      } catch {
+        setToast('No se pudo guardar en la base compartida.');
+        setTimeout(() => setToast(''), 4000);
+      } finally {
+        setTimeout(() => setSaving(false), 150);
+      }
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -119,6 +194,8 @@ export default function MerchTracker() {
   const removeLocation = (id) => persist({ ...data, locations: data.locations.filter((l) => l.id !== id) });
   const addPerson = (person) => persist({ ...data, people: [...(data.people || []), { ...person, id: uid() }] });
   const removePerson = (id) => persist({ ...data, people: (data.people || []).filter((u) => u.id !== id) });
+  const addProvider = (provider) => persist({ ...data, providers: [...(data.providers || []), { ...provider, id: uid() }] });
+  const removeProvider = (id) => persist({ ...data, providers: (data.providers || []).filter((p) => p.id !== id) });
   const addMovement = (mv) => persist({ ...data, movements: [{ ...mv, id: uid() }, ...data.movements] });
   const removeMovement = (id) => persist({ ...data, movements: data.movements.filter((m) => m.id !== id) });
 
@@ -131,6 +208,9 @@ export default function MerchTracker() {
           <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#8a8367', textTransform: 'uppercase' }}>Control de stock · v1</span>
           <h1 className="mt-display" style={{ fontSize: 20, fontWeight: 700, margin: '2px 0 0', color: '#20291F', lineHeight: 1.15 }}>Merch Tracker</h1>
           <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#C98A2C' : '#8a8367', display: 'block', marginTop: 6 }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
+          <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, color: cloudOn ? '#4F7A5B' : '#8a8367' }}>
+            {cloudOn ? <Wifi size={11} /> : <WifiOff size={11} />} {cloudOn ? 'compartido (Supabase)' : 'solo local'}
+          </span>
         </div>
         <div className="perforation" style={{ marginBottom: 8 }} />
         <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#8a8367', textTransform: 'uppercase', marginBottom: 4 }}>Menú</span>
@@ -140,6 +220,7 @@ export default function MerchTracker() {
           { id: 'productos', label: 'Productos', icon: Package },
           { id: 'ubicaciones', label: 'Restaurantes', icon: Store },
           { id: 'personas', label: 'Personas', icon: Users },
+          { id: 'proveedores', label: 'Proveedores', icon: Truck },
         ].map(({ id, label, icon: Icon, badge }) => (
           <button
             key={id}
@@ -176,13 +257,16 @@ export default function MerchTracker() {
             <Movimientos data={data} onAdd={addMovement} onRemove={removeMovement} />
           )}
           {tab === 'productos' && (
-            <Productos products={data.products} stats={stats} onAdd={addProduct} onRemove={removeProduct} />
+            <Productos products={data.products} stats={stats} providers={data.providers || []} onAdd={addProduct} onRemove={removeProduct} />
           )}
           {tab === 'ubicaciones' && (
             <Ubicaciones locations={data.locations} products={data.products} movements={data.movements} people={data.people || []} onAdd={addLocation} onRemove={removeLocation} onAddMovement={addMovement} />
           )}
           {tab === 'personas' && (
             <Personas people={data.people || []} movements={data.movements} onAdd={addPerson} onRemove={removePerson} />
+          )}
+          {tab === 'proveedores' && (
+            <Proveedores providers={data.providers || []} products={data.products} onAdd={addProvider} onRemove={removeProvider} />
           )}
         </main>
       </div>
@@ -358,13 +442,17 @@ function Field({ label, children }) {
   );
 }
 
-function Productos({ products, stats, onAdd, onRemove }) {
-  const [form, setForm] = useState({ name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20' });
+function Productos({ products, stats, providers, onAdd, onRemove }) {
+  const [form, setForm] = useState({ name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' });
   const submit = (e) => {
     e.preventDefault();
     if (!form.name) return;
-    onAdd({ name: form.name, category: form.category || 'Merch', price: Number(form.price) || 0, invested: Number(form.invested) || 0, initialStock: Number(form.initialStock) || 0, lowStockThreshold: Number(form.lowStockThreshold) || 20 });
-    setForm({ name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20' });
+    onAdd({
+      name: form.name, category: form.category || 'Merch', price: Number(form.price) || 0, invested: Number(form.invested) || 0,
+      initialStock: Number(form.initialStock) || 0, lowStockThreshold: Number(form.lowStockThreshold) || 20,
+      providerId: form.providerId, weight: form.weight, unitsPerPackage: form.unitsPerPackage, mockupUrl: form.mockupUrl,
+    });
+    setForm({ name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' });
   };
   return (
     <div>
@@ -378,6 +466,15 @@ function Productos({ products, stats, onAdd, onRemove }) {
           <Field label="Alertar si baja de">
             <input className="mt-input" type="number" style={{ width: 90 }} value={form.lowStockThreshold} onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })} />
           </Field>
+          <Field label="Proveedor">
+            <select className="mt-input" value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })}>
+              <option value="">—</option>
+              {providers.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Peso / medida"><input className="mt-input" style={{ width: 100 }} placeholder="ej. 250g" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></Field>
+          <Field label="Uds. por paquete"><input className="mt-input" type="number" style={{ width: 100 }} value={form.unitsPerPackage} onChange={(e) => setForm({ ...form, unitsPerPackage: e.target.value })} /></Field>
+          <Field label="Mockup (link)"><input className="mt-input" style={{ width: 180 }} placeholder="https://..." value={form.mockupUrl} onChange={(e) => setForm({ ...form, mockupUrl: e.target.value })} /></Field>
           <button type="submit" className="mt-btn"><Plus size={14} /> Agregar</button>
         </form>
       </Card>
@@ -387,15 +484,21 @@ function Productos({ products, stats, onAdd, onRemove }) {
           const isLow = p.stockActual > 0 && p.stockActual < threshold;
           const movido = Math.max(0, Number(p.initialStock) - p.stockActual);
           const revenueEstimado = movido * Number(p.price || 0);
+          const provider = providers.find((pr) => pr.id === p.providerId);
           return (
-            <Card key={p.id} style={{ padding: 14, flex: '1 1 220px', borderColor: isLow ? '#C1442E' : '#CFC6AC' }}>
+            <Card key={p.id} style={{ padding: 14, flex: '1 1 240px', borderColor: isLow ? '#C1442E' : '#CFC6AC' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {p.name}
-                    {isLow && <AlertTriangle size={13} color="#C1442E" />}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {p.mockupUrl && (
+                    <img src={p.mockupUrl} alt={p.name} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #CFC6AC', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {p.name}
+                      {isLow && <AlertTriangle size={13} color="#C1442E" />}
+                    </div>
+                    <div className="mt-mono muted" style={{ fontSize: 11 }}>{p.category}</div>
                   </div>
-                  <div className="mt-mono muted" style={{ fontSize: 11 }}>{p.category}</div>
                 </div>
                 <button onClick={() => onRemove(p.id)} className="icon-btn"><Trash2 size={13} /></button>
               </div>
@@ -406,17 +509,61 @@ function Productos({ products, stats, onAdd, onRemove }) {
                 <span className="muted">Stock inicial</span><span>{p.initialStock}</span>
                 <span className="muted">Stock actual</span><span style={{ color: isLow ? '#C1442E' : 'inherit', fontWeight: isLow ? 700 : 400 }}>{p.stockActual}</span>
                 <span className="muted">Umbral alerta</span><span>{threshold}</span>
+                {p.weight && (<><span className="muted">Peso</span><span>{p.weight}</span></>)}
+                {p.unitsPerPackage && (<><span className="muted">Uds/paquete</span><span>{p.unitsPerPackage}</span></>)}
+                <span className="muted">Proveedor</span><span>{provider?.name || '—'}</span>
               </div>
               <div className="perforation" style={{ margin: '10px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase' }}>Revenue estimado</span>
                 <span className="mt-mono" style={{ fontSize: 15, fontWeight: 700, color: '#C98A2C' }}>{euro(revenueEstimado)}</span>
               </div>
-              <div className="mt-mono muted" style={{ fontSize: 10, marginTop: 2 }}>({movido} uds movidas × {euro(p.price)})</div>
+              <div className="mt-mono muted" style={{ fontSize: 10, marginTop: 2, marginBottom: isLow ? 10 : 0 }}>({movido} uds movidas × {euro(p.price)})</div>
+              {isLow && <PedirMasButton product={p} provider={provider} />}
             </Card>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function PedirMasButton({ product, provider }) {
+  const [open, setOpen] = useState(false);
+  const [qty, setQty] = useState('');
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-mono"
+        style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center', background: '#FBEAE6', border: '1.4px solid #C1442E', color: '#8a2b1a', borderRadius: 5, padding: '7px 0', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+      >
+        <Mail size={13} /> Pedir más
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ background: '#F1ECDD', border: '1.4px dashed #CFC6AC', borderRadius: 6, padding: 10 }}>
+      {!provider?.email ? (
+        <p className="muted" style={{ fontSize: 11.5, margin: 0 }}>Este producto no tiene proveedor con email cargado. Agregalo en la pestaña Proveedores.</p>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+          <Field label="Cantidad">
+            <input className="mt-input" type="number" min="1" style={{ width: 80 }} value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+          </Field>
+          <a
+            className="mt-btn"
+            style={{ textDecoration: 'none', opacity: qty ? 1 : 0.5, pointerEvents: qty ? 'auto' : 'none' }}
+            href={buildOrderMailto(product, provider, qty)}
+            onClick={() => setTimeout(() => setOpen(false), 300)}
+          >
+            <Mail size={13} /> Abrir mail
+          </a>
+        </div>
+      )}
+      <button onClick={() => setOpen(false)} className="icon-btn" style={{ marginTop: 6, fontSize: 11 }}>Cancelar</button>
     </div>
   );
 }
@@ -638,6 +785,53 @@ function Personas({ people, movements, onAdd, onRemove }) {
               <span style={{ fontWeight: 600 }}>{u.name}</span>
               <span className="mt-mono muted" style={{ fontSize: 11 }}>{count} movimiento{count === 1 ? '' : 's'}</span>
               <button onClick={() => onRemove(u.id)} className="icon-btn" style={{ marginLeft: 4 }}><X size={13} /></button>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Proveedores({ providers, products, onAdd, onRemove }) {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', notes: '' });
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.name) return;
+    onAdd(form);
+    setForm({ name: '', email: '', phone: '', notes: '' });
+  };
+  return (
+    <div>
+      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 520 }}>
+        <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Field label="Nombre"><input className="mt-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
+          <Field label="Email"><input className="mt-input" type="email" placeholder="pedidos@proveedor.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Teléfono"><input className="mt-input" style={{ width: 130 }} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Notas"><input className="mt-input" placeholder="opcional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+          <button type="submit" className="mt-btn"><Plus size={14} /> Agregar</button>
+        </form>
+      </Card>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+        {providers.length === 0 && <p className="muted" style={{ fontSize: 13 }}>Todavía no hay proveedores cargados.</p>}
+        {providers.map((pr) => {
+          const linked = products.filter((p) => p.providerId === pr.id);
+          return (
+            <Card key={pr.id} style={{ padding: 14, flex: '1 1 220px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Truck size={15} color="#6B8F71" />
+                  <span style={{ fontWeight: 700 }}>{pr.name}</span>
+                </div>
+                <button onClick={() => onRemove(pr.id)} className="icon-btn"><Trash2 size={13} /></button>
+              </div>
+              <div className="perforation" style={{ margin: '10px 0' }} />
+              <div className="mt-mono" style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span>{pr.email || <span className="muted">sin email</span>}</span>
+                {pr.phone && <span className="muted">{pr.phone}</span>}
+                {pr.notes && <span className="muted" style={{ fontStyle: 'italic' }}>{pr.notes}</span>}
+                <span className="muted" style={{ marginTop: 4 }}>{linked.length} producto{linked.length === 1 ? '' : 's'} asociado{linked.length === 1 ? '' : 's'}</span>
+              </div>
             </Card>
           );
         })}
