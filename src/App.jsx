@@ -516,9 +516,8 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
     <div>
       <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#C98A2C' : '#CFC6AC' }}>
         {editingId && (
-          <div className="mt-mono" style={{ fontSize: 11, color: '#C98A2C', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="mt-mono" style={{ fontSize: 11, color: '#C98A2C', marginBottom: 10 }}>
             Editando movimiento existente
-            <button type="button" onClick={cancelEdit} className="icon-btn" style={{ fontSize: 10 }}>cancelar</button>
           </div>
         )}
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -558,6 +557,11 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
           <button type="submit" className="mt-btn">
             {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Registrar</>}
           </button>
+          {editingId && (
+            <button type="button" onClick={cancelEdit} className="mt-btn" style={{ background: 'transparent', color: '#8a8367', border: '1.4px solid #CFC6AC' }}>
+              <X size={14} /> Cancelar
+            </button>
+          )}
         </form>
       </Card>
 
@@ -597,8 +601,12 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
           <Field label="Desde"><input className="mt-input" type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></Field>
           <Field label="Hasta"><input className="mt-input" type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></Field>
           {filtersActive && (
-            <button onClick={() => setFilters({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' })} className="icon-btn" style={{ fontSize: 11 }}>
-              <X size={12} /> Limpiar filtros
+            <button
+              onClick={() => setFilters({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' })}
+              className="mt-mono"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FBEAE6', border: '1.4px solid #C1442E', color: '#8a2b1a', borderRadius: 5, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              <X size={13} /> Limpiar filtros
             </button>
           )}
         </div>
@@ -1115,20 +1123,20 @@ function Proveedores({ providers, products, onAdd, onRemove }) {
 }
 
 const baseStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
-  .mt-root { font-family: 'Inter', sans-serif; background: #EFEAD9; color: #20291F; }
-  .mt-display { font-family: 'Space Grotesk', sans-serif; }
-  .mt-mono { font-family: 'IBM Plex Mono', monospace; }
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+  .mt-root { font-family: 'Poppins', sans-serif; background: #EFEAD9; color: #20291F; }
+  .mt-display { font-family: 'Poppins', sans-serif; }
+  .mt-mono { font-family: 'Poppins', sans-serif; }
   .muted { color: #8a8367; }
   .perforation { background-image: radial-gradient(circle, #CFC6AC 1.4px, transparent 1.4px); background-size: 12px 2px; height: 2px; }
   .tag-card { position: relative; border: 1.4px solid #CFC6AC; background: #FBF8EE; border-radius: 8px; }
   .mt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .mt-table th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #8a8367; padding: 10px 14px; border-bottom: 1.4px solid #CFC6AC; }
+  .mt-table th { text-align: left; font-family: 'Poppins', sans-serif; font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #8a8367; padding: 10px 14px; border-bottom: 1.4px solid #CFC6AC; }
   .mt-table td { padding: 9px 14px; border-bottom: 1px solid #E4DFCC; }
   .mt-table tr:last-child td { border-bottom: none; }
-  .mt-input { border: 1.4px solid #CFC6AC; background: #FBF8EE; border-radius: 5px; padding: 6px 9px; font-size: 13px; font-family: 'Inter', sans-serif; color: #20291F; }
+  .mt-input { border: 1.4px solid #CFC6AC; background: #FBF8EE; border-radius: 5px; padding: 6px 9px; font-size: 13px; font-family: 'Poppins', sans-serif; color: #20291F; }
   .mt-input:focus { outline: 2px solid #4F7A5B; outline-offset: 1px; }
-  .mt-btn { display: flex; align-items: center; gap: 6px; background: #20291F; color: #FBF8EE; border: none; border-radius: 5px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+  .mt-btn { display: flex; align-items: center; gap: 6px; background: #20291F; color: #FBF8EE; border: none; border-radius: 5px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Poppins', sans-serif; }
   .mt-btn:hover { background: #34412E; }
   .icon-btn { background: none; border: none; color: #8a8367; cursor: pointer; padding: 4px; display: flex; }
   .icon-btn:hover { color: #C1442E; }
