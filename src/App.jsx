@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff } from 'lucide-react';
+import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'merch-tracker-v1';
@@ -46,6 +46,7 @@ const TYPE_META = {
 
 const euro = (n) => `€${(Number(n) || 0).toFixed(2)}`;
 const uid = () => Math.random().toString(36).slice(2, 10);
+const confirmDelete = (msg) => window.confirm(msg || '¿Seguro que querés eliminar esto? No se puede deshacer.');
 
 function buildOrderMailto(product, provider, qty) {
   const subject = `Pedido de reposición: ${product.name}`;
@@ -188,16 +189,32 @@ export default function MerchTracker() {
   const lowStock = stats.filter((p) => p.stockActual > 0 && p.stockActual < (Number(p.lowStockThreshold) || 20));
 
   const addProduct = (product) => persist({ ...data, products: [...data.products, { ...product, id: uid() }] });
-  const removeProduct = (id) =>
+  const updateProduct = (id, updates) => persist({ ...data, products: data.products.map((p) => (p.id === id ? { ...p, ...updates } : p)) });
+  const removeProduct = (id) => {
+    if (!confirmDelete('¿Eliminar este producto? También se van a borrar todos sus movimientos registrados.')) return;
     persist({ ...data, products: data.products.filter((p) => p.id !== id), movements: data.movements.filter((m) => m.productId !== id) });
+  };
   const addLocation = (loc) => persist({ ...data, locations: [...data.locations, { ...loc, id: uid() }] });
-  const removeLocation = (id) => persist({ ...data, locations: data.locations.filter((l) => l.id !== id) });
+  const removeLocation = (id) => {
+    if (!confirmDelete('¿Eliminar este restaurante/ubicación?')) return;
+    persist({ ...data, locations: data.locations.filter((l) => l.id !== id) });
+  };
   const addPerson = (person) => persist({ ...data, people: [...(data.people || []), { ...person, id: uid() }] });
-  const removePerson = (id) => persist({ ...data, people: (data.people || []).filter((u) => u.id !== id) });
+  const removePerson = (id) => {
+    if (!confirmDelete('¿Eliminar esta persona del equipo?')) return;
+    persist({ ...data, people: (data.people || []).filter((u) => u.id !== id) });
+  };
   const addProvider = (provider) => persist({ ...data, providers: [...(data.providers || []), { ...provider, id: uid() }] });
-  const removeProvider = (id) => persist({ ...data, providers: (data.providers || []).filter((p) => p.id !== id) });
+  const removeProvider = (id) => {
+    if (!confirmDelete('¿Eliminar este proveedor?')) return;
+    persist({ ...data, providers: (data.providers || []).filter((p) => p.id !== id) });
+  };
   const addMovement = (mv) => persist({ ...data, movements: [{ ...mv, id: uid() }, ...data.movements] });
-  const removeMovement = (id) => persist({ ...data, movements: data.movements.filter((m) => m.id !== id) });
+  const updateMovement = (id, updates) => persist({ ...data, movements: data.movements.map((m) => (m.id === id ? { ...m, ...updates } : m)) });
+  const removeMovement = (id) => {
+    if (!confirmDelete('¿Eliminar este movimiento? No se puede deshacer.')) return;
+    persist({ ...data, movements: data.movements.filter((m) => m.id !== id) });
+  };
 
   return (
     <div className="mt-root" style={{ minHeight: '100%' }}>
@@ -254,13 +271,13 @@ export default function MerchTracker() {
             <Dashboard stats={stats} totalRecaudado={totalRecaudado} totalVendido={totalVendido} totalInvertido={totalInvertido} totalStock={totalStock} lowStock={lowStock} locations={data.locations} movements={data.movements} />
           )}
           {tab === 'movimientos' && (
-            <Movimientos data={data} onAdd={addMovement} onRemove={removeMovement} />
+            <Movimientos data={data} onAdd={addMovement} onUpdate={updateMovement} onRemove={removeMovement} />
           )}
           {tab === 'productos' && (
             <Productos products={data.products} stats={stats} providers={data.providers || []} onAdd={addProduct} onRemove={removeProduct} />
           )}
           {tab === 'ubicaciones' && (
-            <Ubicaciones locations={data.locations} products={data.products} movements={data.movements} people={data.people || []} onAdd={addLocation} onRemove={removeLocation} onAddMovement={addMovement} />
+            <Ubicaciones locations={data.locations} products={data.products} movements={data.movements} people={data.people || []} onAdd={addLocation} onRemove={removeLocation} onAddMovement={addMovement} onUpdateMovement={updateMovement} onRemoveMovement={removeMovement} />
           )}
           {tab === 'personas' && (
             <Personas people={data.people || []} movements={data.movements} onAdd={addPerson} onRemove={removePerson} />
@@ -328,7 +345,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
       </Card>
 
       <SectionTitle>Por restaurante</SectionTitle>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
         {restaurantes.map((loc) => {
           const ventas = movements.filter((m) => m.locationId === loc.id && m.type === 'venta');
           const uds = ventas.reduce((s, m) => s + Number(m.quantity), 0);
@@ -342,28 +359,168 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
           );
         })}
       </div>
+
+      <SectionTitle>Gráficos</SectionTitle>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+        <Card style={{ padding: 16, flex: '1 1 320px' }}>
+          <div className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase', marginBottom: 10 }}>Recaudado por producto</div>
+          <BarChart data={stats.map((p) => ({ label: p.name, value: p.recaudado }))} color="#4F7A5B" valueFormat={euro} />
+        </Card>
+        <Card style={{ padding: 16, flex: '1 1 320px' }}>
+          <div className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase', marginBottom: 10 }}>Recaudado por restaurante</div>
+          <BarChart
+            data={restaurantes.map((loc) => ({
+              label: loc.name,
+              value: movements.filter((m) => m.locationId === loc.id && m.type === 'venta').reduce((s, m) => s + Number(m.amount), 0),
+            }))}
+            color="#C98A2C"
+            valueFormat={euro}
+          />
+        </Card>
+      </div>
+
+      <Card style={{ padding: 16, marginBottom: 4 }}>
+        <div className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase', marginBottom: 10 }}>Recaudado por día (ventas)</div>
+        <TrendChart movements={movements} />
+      </Card>
     </div>
   );
+}
+
+function BarChart({ data, color = '#4F7A5B', valueFormat = (v) => v, height = 150 }) {
+  const clean = data.filter((d) => d.value > 0);
+  if (clean.length === 0) return <p className="muted" style={{ fontSize: 12 }}>Todavía no hay datos para graficar.</p>;
+  const max = Math.max(1, ...clean.map((d) => d.value));
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, height, overflowX: 'auto', padding: '4px 4px 0' }}>
+      {clean.map((d, i) => (
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 46, flex: '0 0 auto' }}>
+          <span className="mt-mono" style={{ fontSize: 10.5, color: '#20291F', marginBottom: 4, whiteSpace: 'nowrap' }}>{valueFormat(d.value)}</span>
+          <div style={{ width: 30, height: Math.max(3, (d.value / max) * (height - 46)), background: color, borderRadius: '4px 4px 0 0' }} />
+          <span className="mt-mono muted" style={{ fontSize: 10, marginTop: 6, whiteSpace: 'nowrap' }}>{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrendChart({ movements }) {
+  const byDate = {};
+  movements.filter((m) => m.type === 'venta').forEach((m) => {
+    byDate[m.date] = (byDate[m.date] || 0) + Number(m.amount);
+  });
+  const data = Object.entries(byDate)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .slice(-21)
+    .map(([date, value]) => ({ label: date.slice(5).replace('-', '/'), value }));
+
+  if (data.length === 0) return <p className="muted" style={{ fontSize: 12 }}>Todavía no hay ventas registradas para graficar la tendencia.</p>;
+  return <BarChart data={data} color="#4F7A5B" valueFormat={euro} height={140} />;
 }
 
 function SectionTitle({ children }) {
   return <div className="mt-display" style={{ fontSize: 14, fontWeight: 700, letterSpacing: 0.3, margin: '4px 0 10px', color: '#20291F' }}>{children}</div>;
 }
 
-function Movimientos({ data, onAdd, onRemove }) {
+function getProductStock(product, movements) {
+  const pm = movements.filter((m) => m.productId === product.id);
+  const ingreso = pm.filter((m) => m.type === 'ingreso').reduce((s, m) => s + Number(m.quantity), 0);
+  const salida = pm.filter((m) => ['venta', 'fallada', 'regalada'].includes(m.type)).reduce((s, m) => s + Number(m.quantity), 0);
+  return Number(product.initialStock) + ingreso - salida;
+}
+
+function exportMovementsCsv(movements, products, locations, people) {
+  const header = ['Fecha', 'Producto', 'Ubicación', 'Quién', 'Tipo', 'Cantidad', 'Monto', 'Nota'];
+  const rows = movements.map((m) => [
+    m.date,
+    products.find((p) => p.id === m.productId)?.name || '',
+    locations.find((l) => l.id === m.locationId)?.name || '',
+    people.find((u) => u.id === m.personId)?.name || '',
+    TYPE_META[m.type]?.label || m.type,
+    m.quantity,
+    m.amount || 0,
+    (m.note || '').replace(/"/g, "'"),
+  ]);
+  const csv = [header, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `movimientos-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const emptyMovForm = (products, locations, people) => ({
+  productId: products[0]?.id || '', locationId: locations[0]?.id || '', personId: people[0]?.id || '',
+  type: 'venta', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '',
+});
+
+function Movimientos({ data, onAdd, onUpdate, onRemove }) {
   const people = data.people || [];
-  const [form, setForm] = useState({ productId: data.products[0]?.id || '', locationId: data.locations[0]?.id || '', personId: people[0]?.id || '', type: 'venta', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '' });
+  const [form, setForm] = useState(() => emptyMovForm(data.products, data.locations, people));
+  const [editingId, setEditingId] = useState(null);
+  const [filters, setFilters] = useState({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' });
 
   const submit = (e) => {
     e.preventDefault();
     if (!form.productId || !form.quantity) return;
-    onAdd({ ...form, quantity: Number(form.quantity), amount: Number(form.amount) || 0 });
-    setForm((f) => ({ ...f, quantity: '', amount: '', note: '' }));
+    const qty = Number(form.quantity);
+    if (['venta', 'fallada', 'regalada'].includes(form.type)) {
+      const product = data.products.find((p) => p.id === form.productId);
+      if (product) {
+        let currentStock = getProductStock(product, data.movements);
+        if (editingId) {
+          const prev = data.movements.find((m) => m.id === editingId);
+          if (prev && prev.productId === form.productId && ['venta', 'fallada', 'regalada'].includes(prev.type)) currentStock += Number(prev.quantity);
+        }
+        if (qty > currentStock) {
+          const ok = window.confirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
+          if (!ok) return;
+        }
+      }
+    }
+    const payload = { ...form, quantity: qty, amount: Number(form.amount) || 0 };
+    if (editingId) {
+      onUpdate(editingId, payload);
+      setEditingId(null);
+    } else {
+      onAdd(payload);
+    }
+    setForm((f) => ({ ...emptyMovForm(data.products, data.locations, people), productId: f.productId, locationId: f.locationId, personId: f.personId, type: f.type }));
   };
+
+  const startEdit = (m) => {
+    setEditingId(m.id);
+    setForm({ productId: m.productId, locationId: m.locationId, personId: m.personId || '', type: m.type, quantity: String(m.quantity), amount: m.amount ? String(m.amount) : '', date: m.date, note: m.note || '' });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyMovForm(data.products, data.locations, people));
+  };
+
+  const categories = [...new Set(data.products.map((p) => p.category).filter(Boolean))];
+
+  const filtered = data.movements.filter((m) => {
+    if (filters.productId && m.productId !== filters.productId) return false;
+    if (filters.locationId && m.locationId !== filters.locationId) return false;
+    if (filters.personId && m.personId !== filters.personId) return false;
+    if (filters.type && m.type !== filters.type) return false;
+    if (filters.from && m.date < filters.from) return false;
+    if (filters.to && m.date > filters.to) return false;
+    return true;
+  });
+  const filtersActive = Object.values(filters).some(Boolean);
 
   return (
     <div>
-      <Card style={{ padding: 16, marginBottom: 20 }}>
+      <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#C98A2C' : '#CFC6AC' }}>
+        {editingId && (
+          <div className="mt-mono" style={{ fontSize: 11, color: '#C98A2C', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Editando movimiento existente
+            <button type="button" onClick={cancelEdit} className="icon-btn" style={{ fontSize: 10 }}>cancelar</button>
+          </div>
+        )}
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="Producto">
             <select className="mt-input" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
@@ -398,22 +555,66 @@ function Movimientos({ data, onAdd, onRemove }) {
           <Field label="Nota">
             <input className="mt-input" type="text" placeholder="opcional" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           </Field>
-          <button type="submit" className="mt-btn"><Plus size={14} /> Registrar</button>
+          <button type="submit" className="mt-btn">
+            {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Registrar</>}
+          </button>
         </form>
       </Card>
 
-      <SectionTitle>Historial</SectionTitle>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+        <SectionTitle>Historial</SectionTitle>
+        <button onClick={() => exportMovementsCsv(filtered, data.products, data.locations, people)} className="mt-btn" style={{ background: '#4F7A5B' }}>
+          <Download size={13} /> Exportar CSV ({filtered.length})
+        </button>
+      </div>
+
+      <Card style={{ padding: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Field label="Producto">
+            <select className="mt-input" value={filters.productId} onChange={(e) => setFilters({ ...filters, productId: e.target.value })}>
+              <option value="">Todos</option>
+              {data.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Ubicación">
+            <select className="mt-input" value={filters.locationId} onChange={(e) => setFilters({ ...filters, locationId: e.target.value })}>
+              <option value="">Todas</option>
+              {data.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Quién">
+            <select className="mt-input" value={filters.personId} onChange={(e) => setFilters({ ...filters, personId: e.target.value })}>
+              <option value="">Todos</option>
+              {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Tipo">
+            <select className="mt-input" value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}>
+              <option value="">Todos</option>
+              {Object.entries(TYPE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Desde"><input className="mt-input" type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></Field>
+          <Field label="Hasta"><input className="mt-input" type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></Field>
+          {filtersActive && (
+            <button onClick={() => setFilters({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' })} className="icon-btn" style={{ fontSize: 11 }}>
+              <X size={12} /> Limpiar filtros
+            </button>
+          )}
+        </div>
+      </Card>
+
       <Card style={{ padding: 0, overflowX: 'auto' }}>
         <table className="mt-table">
           <thead><tr><th>Fecha</th><th>Producto</th><th>Ubicación</th><th>Quién</th><th>Tipo</th><th>Cant.</th><th>Monto</th><th>Nota</th><th></th></tr></thead>
           <tbody>
-            {data.movements.length === 0 && <tr><td colSpan={9} className="muted" style={{ padding: 16 }}>Todavía no hay movimientos cargados.</td></tr>}
-            {data.movements.map((m) => {
+            {filtered.length === 0 && <tr><td colSpan={9} className="muted" style={{ padding: 16 }}>{filtersActive ? 'Ningún movimiento coincide con los filtros.' : 'Todavía no hay movimientos cargados.'}</td></tr>}
+            {filtered.map((m) => {
               const prod = data.products.find((p) => p.id === m.productId);
               const loc = data.locations.find((l) => l.id === m.locationId);
               const person = people.find((u) => u.id === m.personId);
               return (
-                <tr key={m.id}>
+                <tr key={m.id} style={{ background: editingId === m.id ? '#F1ECDD' : 'transparent' }}>
                   <td className="mt-mono muted">{m.date}</td>
                   <td style={{ fontWeight: 600 }}>{prod?.name || '—'}</td>
                   <td className="mt-mono">{loc?.name || '—'}</td>
@@ -422,7 +623,10 @@ function Movimientos({ data, onAdd, onRemove }) {
                   <td className="mt-mono">{m.quantity}</td>
                   <td className="mt-mono">{m.amount ? euro(m.amount) : '—'}</td>
                   <td className="muted">{m.note || '—'}</td>
-                  <td><button onClick={() => onRemove(m.id)} className="icon-btn"><Trash2 size={13} /></button></td>
+                  <td style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={() => startEdit(m)} className="icon-btn"><Pencil size={13} /></button>
+                    <button onClick={() => onRemove(m.id)} className="icon-btn"><Trash2 size={13} /></button>
+                  </td>
                 </tr>
               );
             })}
@@ -511,7 +715,12 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
       <Card style={{ padding: 16, marginBottom: 20 }}>
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="Nombre"><input className="mt-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-          <Field label="Categoría"><input className="mt-input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></Field>
+          <Field label="Categoría">
+            <input className="mt-input" list="categorias-existentes" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+            <datalist id="categorias-existentes">
+              {[...new Set(products.map((p) => p.category).filter(Boolean))].map((c) => <option key={c} value={c} />)}
+            </datalist>
+          </Field>
           <Field label="Precio unit. (€)"><input className="mt-input" type="number" step="0.01" style={{ width: 100 }} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
           <Field label="Invertido (€)"><input className="mt-input" type="number" step="0.01" style={{ width: 100 }} value={form.invested} onChange={(e) => setForm({ ...form, invested: e.target.value })} /></Field>
           <Field label="Stock inicial"><input className="mt-input" type="number" style={{ width: 100 }} value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} /></Field>
@@ -620,7 +829,7 @@ function PedirMasButton({ product, provider }) {
   );
 }
 
-function Ubicaciones({ locations, products, movements, people, onAdd, onRemove, onAddMovement }) {
+function Ubicaciones({ locations, products, movements, people, onAdd, onRemove, onAddMovement, onUpdateMovement, onRemoveMovement }) {
   const [form, setForm] = useState({ name: '', type: 'restaurante' });
   const [selectedId, setSelectedId] = useState(null);
   const submit = (e) => {
@@ -662,12 +871,12 @@ function Ubicaciones({ locations, products, movements, people, onAdd, onRemove, 
         ))}
       </div>
 
-      {selected && <LocationDetail location={selected} products={products} movements={movements} people={people} onClose={() => setSelectedId(null)} onAddMovement={onAddMovement} />}
+      {selected && <LocationDetail location={selected} products={products} movements={movements} people={people} onClose={() => setSelectedId(null)} onAddMovement={onAddMovement} onUpdateMovement={onUpdateMovement} onRemoveMovement={onRemoveMovement} />}
     </div>
   );
 }
 
-function LocationDetail({ location, products, movements, people, onClose, onAddMovement }) {
+function LocationDetail({ location, products, movements, people, onClose, onAddMovement, onUpdateMovement, onRemoveMovement }) {
   const lm = movements.filter((m) => m.locationId === location.id);
   const [quick, setQuick] = useState({ productId: products[0]?.id || '', personId: people[0]?.id || '', type: 'entrega', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10) });
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -675,7 +884,18 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
   const submitQuick = (e) => {
     e.preventDefault();
     if (!quick.productId || !quick.quantity) return;
-    onAddMovement({ productId: quick.productId, locationId: location.id, personId: quick.personId, type: quick.type, quantity: Number(quick.quantity), amount: Number(quick.amount) || 0, date: quick.date, note: '' });
+    const qty = Number(quick.quantity);
+    if (['venta', 'fallada', 'regalada'].includes(quick.type)) {
+      const product = products.find((p) => p.id === quick.productId);
+      if (product) {
+        const currentStock = getProductStock(product, movements);
+        if (qty > currentStock) {
+          const ok = window.confirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
+          if (!ok) return;
+        }
+      }
+    }
+    onAddMovement({ productId: quick.productId, locationId: location.id, personId: quick.personId, type: quick.type, quantity: qty, amount: Number(quick.amount) || 0, date: quick.date, note: '' });
     setQuick((f) => ({ ...f, quantity: '', amount: '' }));
   };
 
@@ -785,9 +1005,9 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
       {historyOpen && (
         <div style={{ overflowX: 'auto' }}>
           <table className="mt-table">
-            <thead><tr><th>Fecha</th><th>Producto</th><th>Quién</th><th>Tipo</th><th>Cant.</th><th>Monto</th><th>Nota</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Producto</th><th>Quién</th><th>Tipo</th><th>Cant.</th><th>Monto</th><th>Nota</th><th></th></tr></thead>
             <tbody>
-              {lm.length === 0 && <tr><td colSpan={7} className="muted" style={{ padding: 12 }}>Sin movimientos.</td></tr>}
+              {lm.length === 0 && <tr><td colSpan={8} className="muted" style={{ padding: 12 }}>Sin movimientos.</td></tr>}
               {lm.map((m) => {
                 const prod = products.find((p) => p.id === m.productId);
                 const person = people.find((u) => u.id === m.personId);
@@ -800,11 +1020,13 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
                     <td className="mt-mono">{m.quantity}</td>
                     <td className="mt-mono">{m.amount ? euro(m.amount) : '—'}</td>
                     <td className="muted">{m.note || '—'}</td>
+                    <td><button onClick={() => onRemoveMovement(m.id)} className="icon-btn"><Trash2 size={13} /></button></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          <p className="mt-mono muted" style={{ fontSize: 10, marginTop: 8 }}>Para editar un movimiento (no solo borrarlo), hacelo desde el tab Movimientos.</p>
         </div>
       )}
     </Card>
