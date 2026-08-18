@@ -1,39 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download } from 'lucide-react';
+import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download, LogIn, LogOut, ShieldAlert } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'merch-tracker-v1';
 
+// Únicos mails autorizados a entrar. La restricción real (a prueba de manipulación)
+// vive en las políticas RLS de Supabase; esto es solo para dar un mensaje claro en pantalla.
+const ALLOWED_EMAILS = ['jflopezsigon@gmail.com', 'gaston@grupofantasia.es'];
+
 const seedData = {
-  products: [
-    { id: 'p1', name: 'Planchas', category: 'Merch', price: 2.75, invested: 1000, initialStock: 2000, lowStockThreshold: 50, providerId: 'pr1', weight: '', unitsPerPackage: '', mockupUrl: '' },
-    { id: 'p2', name: 'Disfraces', category: 'Merch', price: 14.3, invested: 1008.45, initialStock: 160, lowStockThreshold: 15, providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' },
-    { id: 'p3', name: 'Pines', category: 'Merch', price: 0, invested: 848.41, initialStock: 500, lowStockThreshold: 30, providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' },
-    { id: 'p4', name: 'Vasos', category: 'Merch', price: 0, invested: 5299.8, initialStock: 1500, lowStockThreshold: 50, providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' },
-  ],
-  providers: [
-    { id: 'pr1', name: 'Gráfica Planchas SRL', email: 'pedidos@graficaplanchas.example', phone: '', notes: '' },
-  ],
-  locations: [
-    { id: 'l1', name: 'Secretos', type: 'restaurante' },
-    { id: 'l2', name: 'Storyland', type: 'restaurante' },
-    { id: 'l3', name: 'Palacio', type: 'restaurante' },
-    { id: 'l4', name: 'Oficina', type: 'oficina' },
-  ],
-  people: [
-    { id: 'u1', name: 'Facu' },
-    { id: 'u2', name: 'Marina' },
-    { id: 'u3', name: 'Tomás' },
-    { id: 'u4', name: 'Vale' },
-  ],
-  movements: [
-    { id: 'm1', productId: 'p1', locationId: 'l1', personId: 'u1', type: 'venta', quantity: 88, amount: 239.9, date: '2026-06-15', note: '' },
-    { id: 'm2', productId: 'p1', locationId: 'l2', personId: 'u2', type: 'venta', quantity: 53, amount: 141.8, date: '2026-06-20', note: '' },
-    { id: 'm3', productId: 'p1', locationId: 'l3', personId: 'u1', type: 'venta', quantity: 40, amount: 102.4, date: '2026-06-25', note: '' },
-    { id: 'm4', productId: 'p1', locationId: 'l2', personId: 'u2', type: 'fallada', quantity: 7, amount: 0, date: '2026-06-20', note: '' },
-    { id: 'm5', productId: 'p1', locationId: 'l2', personId: 'u2', type: 'regalada', quantity: 6, amount: 0, date: '2026-06-20', note: '6 pack' },
-    { id: 'm6', productId: 'p2', locationId: 'l1', personId: 'u3', type: 'venta', quantity: 5, amount: 71.5, date: '2026-06-19', note: '' },
-  ],
+  products: [],
+  providers: [],
+  locations: [],
+  people: [],
+  movements: [],
 };
 
 const TYPE_META = {
@@ -91,11 +71,38 @@ export default function MerchTracker() {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('dashboard');
   const [toast, setToast] = useState('');
+  const [session, setSession] = useState(undefined); // undefined = verificando, null = sin sesión
+  const [authError, setAuthError] = useState('');
   const skipNextRealtime = useRef(false);
 
   const cloudOn = !!supabase;
+  const userEmail = session?.user?.email || '';
+  const isAllowed = !cloudOn || ALLOWED_EMAILS.includes(userEmail);
+  const readyForData = !cloudOn || (session && isAllowed);
+
+  // Sesión de Google (solo aplica cuando hay Supabase conectado)
+  useEffect(() => {
+    if (!supabase) { setSession(null); return; }
+    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => setSession(sess));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const signInWithGoogle = async () => {
+    setAuthError('');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) setAuthError('No se pudo iniciar sesión: ' + error.message);
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   useEffect(() => {
+    if (!readyForData) return;
     (async () => {
       if (supabase) {
         try {
@@ -125,11 +132,11 @@ export default function MerchTracker() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [readyForData]);
 
   // Escucha cambios que haga la otra persona en tiempo real
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || !readyForData) return;
     const channel = supabase
       .channel('app_state_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.main' }, (payload) => {
@@ -170,6 +177,24 @@ export default function MerchTracker() {
       setTimeout(() => setSaving(false), 150);
     }
   }, []);
+
+  if (cloudOn && session === undefined) {
+    return (
+      <div className="mt-root" style={{ padding: 40, textAlign: 'center' }}>
+        <style>{baseStyles}</style>
+        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#3D7A5C' }} />
+        <p className="mt-mono" style={{ marginTop: 10, fontSize: 13, color: '#6B7280' }}>Verificando sesión…</p>
+      </div>
+    );
+  }
+
+  if (cloudOn && !session) {
+    return <LoginScreen onSignIn={signInWithGoogle} error={authError} />;
+  }
+
+  if (cloudOn && !isAllowed) {
+    return <NotAuthorizedScreen email={userEmail} onSignOut={signOut} />;
+  }
 
   if (loading || !data) {
     return (
@@ -255,6 +280,22 @@ export default function MerchTracker() {
             )}
           </button>
         ))}
+        {cloudOn && (
+          <>
+            <div className="perforation" style={{ margin: '10px 8px' }} />
+            <button
+              onClick={signOut}
+              className="mt-mono"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', fontSize: 12.5,
+                border: 'none', background: 'transparent', color: '#9CA3AF',
+                borderRadius: 8, cursor: 'pointer', fontWeight: 500, width: '100%', textAlign: 'left',
+              }}
+            >
+              <LogOut size={14} /> {userEmail}
+            </button>
+          </>
+        )}
       </nav>
 
       <div style={{ marginLeft: 240, paddingTop: 16 }}>
@@ -285,6 +326,43 @@ export default function MerchTracker() {
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+function LoginScreen({ onSignIn, error }) {
+  return (
+    <div className="mt-root" style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <style>{baseStyles}</style>
+      <Card style={{ padding: '36px 32px', maxWidth: 340, width: '100%', textAlign: 'center' }}>
+        <div style={{ width: 40, height: 40, borderRadius: 11, background: '#16181D', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, margin: '0 auto 16px' }}>M</div>
+        <h1 className="mt-display" style={{ fontSize: 17, fontWeight: 700, margin: '0 0 6px', color: '#16181D' }}>Merch Tracker</h1>
+        <p className="mt-mono" style={{ fontSize: 12.5, color: '#6B7280', margin: '0 0 24px', lineHeight: 1.5 }}>
+          Iniciá sesión con tu cuenta de Google para acceder al stock de Grupo Fantasía.
+        </p>
+        <button onClick={onSignIn} className="mt-btn" style={{ width: '100%' }}>
+          <LogIn size={15} /> Continuar con Google
+        </button>
+        {error && <p className="mt-mono" style={{ fontSize: 11.5, color: '#D8493F', marginTop: 14 }}>{error}</p>}
+      </Card>
+    </div>
+  );
+}
+
+function NotAuthorizedScreen({ email, onSignOut }) {
+  return (
+    <div className="mt-root" style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <style>{baseStyles}</style>
+      <Card style={{ padding: '36px 32px', maxWidth: 360, width: '100%', textAlign: 'center' }}>
+        <ShieldAlert size={30} color="#D8493F" style={{ margin: '0 auto 14px' }} />
+        <h1 className="mt-display" style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px', color: '#16181D' }}>Sin acceso</h1>
+        <p className="mt-mono" style={{ fontSize: 12.5, color: '#6B7280', margin: '0 0 20px', lineHeight: 1.5 }}>
+          La cuenta <strong style={{ color: '#16181D' }}>{email}</strong> no tiene permiso para entrar acá. Pedile a un administrador que te agregue.
+        </p>
+        <button onClick={onSignOut} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1px solid #E1E3E8', boxShadow: 'none', width: '100%' }}>
+          <LogOut size={15} /> Cerrar sesión
+        </button>
+      </Card>
     </div>
   );
 }
