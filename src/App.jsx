@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download, LogIn, LogOut, ShieldAlert } from 'lucide-react';
+import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download, LogIn, LogOut, ShieldAlert, Menu } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'merch-tracker-v1';
@@ -73,6 +73,7 @@ export default function MerchTracker() {
   const [toast, setToast] = useState('');
   const [session, setSession] = useState(undefined); // undefined = verificando, null = sin sesión
   const [authError, setAuthError] = useState('');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const skipNextRealtime = useRef(false);
 
   const cloudOn = !!supabase;
@@ -245,10 +246,20 @@ export default function MerchTracker() {
     <div className="mt-root" style={{ minHeight: '100%' }}>
       <style>{baseStyles}</style>
 
-      <nav style={{ position: 'fixed', top: 16, left: 16, bottom: 16, width: 208, background: '#FFFFFF', border: '1px solid #EDEEF1', borderRadius: 16, boxShadow: '0 1px 2px rgba(16,20,24,0.04), 0 1px 1px rgba(16,20,24,0.03)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+      {!mobileNavOpen && (
+        <button onClick={() => setMobileNavOpen(true)} className="mt-hamburger" aria-label="Abrir menú">
+          <Menu size={18} />
+        </button>
+      )}
+      {mobileNavOpen && <div className="mt-overlay" onClick={() => setMobileNavOpen(false)} />}
+
+      <nav className={`mt-sidebar${mobileNavOpen ? ' mt-sidebar-open' : ''}`} style={{ position: 'fixed', top: 16, left: 16, bottom: 16, width: 208, background: '#FFFFFF', border: '1px solid #EDEEF1', borderRadius: 16, boxShadow: '0 1px 2px rgba(16,20,24,0.04), 0 1px 1px rgba(16,20,24,0.03)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px 16px' }}>
           <div style={{ width: 26, height: 26, borderRadius: 7, background: '#16181D', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, flexShrink: 0 }}>M</div>
           <h1 className="mt-display" style={{ fontSize: 13.5, fontWeight: 700, margin: 0, color: '#16181D', letterSpacing: '-0.2px', lineHeight: 1.15 }}>Merch Tracker</h1>
+          <button onClick={() => setMobileNavOpen(false)} className="mt-drawer-close icon-btn" style={{ marginLeft: 'auto' }} aria-label="Cerrar menú">
+            <X size={16} />
+          </button>
         </div>
         <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#B8791A' : '#9CA3AF', padding: '0 8px 4px' }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
         <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 14px', color: cloudOn ? '#3D7A5C' : '#9CA3AF' }}>
@@ -265,7 +276,7 @@ export default function MerchTracker() {
         ].map(({ id, label, icon: Icon, badge }) => (
           <button
             key={id}
-            onClick={() => setTab(id)}
+            onClick={() => { setTab(id); setMobileNavOpen(false); }}
             className="mt-mono tab-btn"
             style={{
               display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', fontSize: 13,
@@ -298,8 +309,8 @@ export default function MerchTracker() {
         )}
       </nav>
 
-      <div style={{ marginLeft: 240, paddingTop: 16 }}>
-        <main style={{ padding: '0 20px 40px' }}>
+      <div className="mt-content" style={{ marginLeft: 240, paddingTop: 16 }}>
+        <main className="mt-main" style={{ padding: '0 20px 40px' }}>
           {toast && (
             <div className="mt-mono" style={{ background: '#FBEAE9', border: '1px solid #F5C6C2', color: '#B23A31', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16 }}>
               {toast}
@@ -1128,7 +1139,7 @@ function Personas({ people, movements, onAdd, onRemove }) {
   return (
     <div>
       <Card style={{ padding: 16, marginBottom: 20, maxWidth: 440 }}>
-        <form onSubmit={submit} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="Nombre"><input className="mt-input" style={{ width: 200 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Rocío" required /></Field>
           <button type="submit" className="mt-btn"><Plus size={14} /> Agregar persona</button>
         </form>
@@ -1220,4 +1231,20 @@ const baseStyles = `
   .tab-btn:hover { color: #16181D; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .animate-spin { animation: spin 1s linear infinite; }
+
+  .mt-hamburger { display: none; position: fixed; top: 16px; left: 16px; z-index: 55; width: 40px; height: 40px; border-radius: 10px; background: #FFFFFF; border: 1px solid #EDEEF1; box-shadow: 0 1px 2px rgba(16,20,24,0.08); align-items: center; justify-content: center; cursor: pointer; color: #16181D; }
+  .mt-overlay { display: none; }
+  .mt-drawer-close { display: none; }
+  @media (max-width: 880px) {
+    .mt-hamburger { display: flex; }
+    .mt-overlay { display: block; position: fixed; inset: 0; background: rgba(16,20,24,0.35); z-index: 45; }
+    .mt-drawer-close { display: flex; }
+    .mt-sidebar { transform: translateX(-120%) !important; transition: transform .25s ease; z-index: 50; width: min(82vw, 260px) !important; }
+    .mt-sidebar.mt-sidebar-open { transform: translateX(0) !important; box-shadow: 0 10px 40px rgba(16,20,24,0.28); }
+    .mt-content { margin-left: 0 !important; padding-top: 64px !important; }
+    .mt-main { padding: 0 14px 32px !important; }
+  }
+  @media (max-width: 480px) {
+    .mt-table th, .mt-table td { padding: 8px 10px; }
+  }
 `;
