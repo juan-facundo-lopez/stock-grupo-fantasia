@@ -38,9 +38,9 @@ const seedData = {
 
 const TYPE_META = {
   entrega: { label: 'Entrega a restaurante', color: '#3E6B8A' },
-  venta: { label: 'Venta', color: '#4F7A5B' },
-  fallada: { label: 'Fallada', color: '#C1442E' },
-  regalada: { label: 'Regalada', color: '#C98A2C' },
+  venta: { label: 'Venta', color: '#3D7A5C' },
+  fallada: { label: 'Fallada', color: '#D8493F' },
+  regalada: { label: 'Regalada', color: '#B8791A' },
   ingreso: { label: 'Ingreso / restock (compra nueva)', color: '#6B4F8A' },
 };
 
@@ -175,8 +175,8 @@ export default function MerchTracker() {
     return (
       <div className="mt-root" style={{ padding: 40, textAlign: 'center' }}>
         <style>{baseStyles}</style>
-        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#4F7A5B' }} />
-        <p className="mt-mono" style={{ marginTop: 10, fontSize: 13, color: '#6b6455' }}>Cargando stock…</p>
+        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#3D7A5C' }} />
+        <p className="mt-mono" style={{ marginTop: 10, fontSize: 13, color: '#6B7280' }}>Cargando stock…</p>
       </div>
     );
   }
@@ -220,17 +220,16 @@ export default function MerchTracker() {
     <div className="mt-root" style={{ minHeight: '100%' }}>
       <style>{baseStyles}</style>
 
-      <nav style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 200, borderRight: '1.5px solid #CFC6AC', background: '#EFEAD9', padding: '24px 14px', display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-        <div style={{ marginBottom: 10 }}>
-          <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#8a8367', textTransform: 'uppercase' }}>Control de stock · v1</span>
-          <h1 className="mt-display" style={{ fontSize: 20, fontWeight: 700, margin: '2px 0 0', color: '#20291F', lineHeight: 1.15 }}>Merch Tracker</h1>
-          <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#C98A2C' : '#8a8367', display: 'block', marginTop: 6 }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
-          <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, color: cloudOn ? '#4F7A5B' : '#8a8367' }}>
-            {cloudOn ? <Wifi size={11} /> : <WifiOff size={11} />} {cloudOn ? 'compartido (Supabase)' : 'solo local'}
-          </span>
+      <nav style={{ position: 'fixed', top: 16, left: 16, bottom: 16, width: 208, background: '#FFFFFF', border: '1px solid #EDEEF1', borderRadius: 16, boxShadow: '0 1px 2px rgba(16,20,24,0.04), 0 1px 1px rgba(16,20,24,0.03)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px 16px' }}>
+          <div style={{ width: 26, height: 26, borderRadius: 7, background: '#16181D', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, flexShrink: 0 }}>M</div>
+          <h1 className="mt-display" style={{ fontSize: 13.5, fontWeight: 700, margin: 0, color: '#16181D', letterSpacing: '-0.2px', lineHeight: 1.15 }}>Merch Tracker</h1>
         </div>
-        <div className="perforation" style={{ marginBottom: 8 }} />
-        <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#8a8367', textTransform: 'uppercase', marginBottom: 4 }}>Menú</span>
+        <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#B8791A' : '#9CA3AF', padding: '0 8px 4px' }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
+        <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 14px', color: cloudOn ? '#3D7A5C' : '#9CA3AF' }}>
+          {cloudOn ? <Wifi size={11} /> : <WifiOff size={11} />} {cloudOn ? 'compartido (Supabase)' : 'solo local'}
+        </span>
+        <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, padding: '0 10px 6px' }}>Menú</span>
         {[
           { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, badge: lowStock.length },
           { id: 'movimientos', label: 'Movimientos', icon: ListPlus },
@@ -244,25 +243,24 @@ export default function MerchTracker() {
             onClick={() => setTab(id)}
             className="mt-mono tab-btn"
             style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', fontSize: 12.5,
-              border: '1.5px solid #CFC6AC',
-              background: tab === id ? '#FBF8EE' : 'transparent', color: tab === id ? '#20291F' : '#8a8367',
-              borderRadius: 6, cursor: 'pointer', fontWeight: 600, width: '100%', textAlign: 'left',
-              borderLeft: tab === id ? '3px solid #4F7A5B' : '1.5px solid #CFC6AC',
+              display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', fontSize: 13,
+              border: 'none',
+              background: tab === id ? '#E8F2EC' : 'transparent', color: tab === id ? '#3D7A5C' : '#6B7280',
+              borderRadius: 8, cursor: 'pointer', fontWeight: tab === id ? 600 : 500, width: '100%', textAlign: 'left',
             }}
           >
-            <Icon size={14} /> {label}
+            <Icon size={15} color={tab === id ? '#3D7A5C' : '#9CA3AF'} /> {label}
             {!!badge && (
-              <span className="mt-mono" style={{ marginLeft: 'auto', background: '#C1442E', color: '#fff', borderRadius: 10, fontSize: 10, padding: '1px 6px', fontWeight: 700 }}>{badge}</span>
+              <span className="mt-mono" style={{ marginLeft: 'auto', background: '#FBEAE9', color: '#D8493F', borderRadius: 20, fontSize: 10.5, padding: '1px 6px', fontWeight: 700 }}>{badge}</span>
             )}
           </button>
         ))}
       </nav>
 
-      <div style={{ paddingLeft: 200 }}>
-        <main style={{ padding: 24, paddingBottom: 40 }}>
+      <div style={{ marginLeft: 240, paddingTop: 16 }}>
+        <main style={{ padding: '0 20px 40px' }}>
           {toast && (
-            <div className="mt-mono" style={{ background: '#FBEAE6', border: '1.5px solid #C1442E', color: '#8a2b1a', padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 16 }}>
+            <div className="mt-mono" style={{ background: '#FBEAE9', border: '1px solid #F5C6C2', color: '#B23A31', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16 }}>
               {toast}
             </div>
           )}
@@ -293,9 +291,9 @@ export default function MerchTracker() {
 
 function KpiCard({ label, value, accent }) {
   return (
-    <Card style={{ padding: '14px 16px', minWidth: 140, flex: '1 1 140px' }}>
-      <div className="mt-mono" style={{ fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: '#8a8367' }}>{label}</div>
-      <div className="mt-display" style={{ fontSize: 22, fontWeight: 700, color: accent || '#20291F', marginTop: 4 }}>{value}</div>
+    <Card style={{ padding: '18px 18px 16px', minWidth: 160, flex: '1 1 160px' }}>
+      <div className="mt-mono" style={{ fontSize: 11.5, fontWeight: 500, color: '#6B7280', marginBottom: 8 }}>{label}</div>
+      <div className="mt-display" style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.4px', color: accent || '#16181D' }}>{value}</div>
     </Card>
   );
 }
@@ -305,16 +303,16 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-        <KpiCard label="Recaudado" value={euro(totalRecaudado)} accent="#4F7A5B" />
+        <KpiCard label="Recaudado" value={euro(totalRecaudado)} accent="#3D7A5C" />
         <KpiCard label="Vendido (uds)" value={totalVendido} />
-        <KpiCard label="Invertido" value={euro(totalInvertido)} accent="#C98A2C" />
+        <KpiCard label="Invertido" value={euro(totalInvertido)} accent="#B8791A" />
         <KpiCard label="Stock restante" value={totalStock} />
       </div>
 
       {lowStock.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FBEAE6', border: '1.5px solid #C1442E', borderRadius: 6, padding: '8px 12px', marginBottom: 20 }}>
-          <AlertTriangle size={15} color="#C1442E" />
-          <span className="mt-mono" style={{ fontSize: 12, color: '#8a2b1a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FBEAE9', border: '1px solid #F5C6C2', borderRadius: 12, padding: '10px 14px', marginBottom: 20 }}>
+          <AlertTriangle size={15} color="#D8493F" />
+          <span className="mt-mono" style={{ fontSize: 12.5, color: '#B23A31' }}>
             Stock bajo: {lowStock.map((p) => `${p.name} (${p.stockActual})`).join(', ')}
           </span>
         </div>
@@ -333,7 +331,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
               <tr key={p.id}>
                 <td style={{ fontWeight: 600 }}>{p.name}</td>
                 <td className="mt-mono muted">{p.category}</td>
-                <td className="mt-mono" style={{ color: p.stockActual < 20 ? '#C1442E' : 'inherit' }}>{p.stockActual}</td>
+                <td className="mt-mono" style={{ color: p.stockActual < 20 ? '#D8493F' : 'inherit' }}>{p.stockActual}</td>
                 <td className="mt-mono">{p.vendido}</td>
                 <td className="mt-mono">{euro(p.recaudado)}</td>
                 <td className="mt-mono muted">{p.fallada}</td>
@@ -354,7 +352,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
             <Card key={loc.id} style={{ padding: '14px 16px', flex: '1 1 160px' }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>{loc.name}</div>
               <div className="mt-mono muted" style={{ fontSize: 12 }}>{uds} unidades</div>
-              <div className="mt-mono" style={{ fontSize: 15, color: '#4F7A5B', fontWeight: 600 }}>{euro(monto)}</div>
+              <div className="mt-mono" style={{ fontSize: 15, color: '#3D7A5C', fontWeight: 600 }}>{euro(monto)}</div>
             </Card>
           );
         })}
@@ -364,7 +362,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
         <Card style={{ padding: 16, flex: '1 1 320px' }}>
           <div className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase', marginBottom: 10 }}>Recaudado por producto</div>
-          <BarChart data={stats.map((p) => ({ label: p.name, value: p.recaudado }))} color="#4F7A5B" valueFormat={euro} />
+          <BarChart data={stats.map((p) => ({ label: p.name, value: p.recaudado }))} color="#3D7A5C" valueFormat={euro} />
         </Card>
         <Card style={{ padding: 16, flex: '1 1 320px' }}>
           <div className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase', marginBottom: 10 }}>Recaudado por restaurante</div>
@@ -373,7 +371,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
               label: loc.name,
               value: movements.filter((m) => m.locationId === loc.id && m.type === 'venta').reduce((s, m) => s + Number(m.amount), 0),
             }))}
-            color="#C98A2C"
+            color="#B8791A"
             valueFormat={euro}
           />
         </Card>
@@ -387,7 +385,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
   );
 }
 
-function BarChart({ data, color = '#4F7A5B', valueFormat = (v) => v, height = 150 }) {
+function BarChart({ data, color = '#3D7A5C', valueFormat = (v) => v, height = 150 }) {
   const clean = data.filter((d) => d.value > 0);
   if (clean.length === 0) return <p className="muted" style={{ fontSize: 12 }}>Todavía no hay datos para graficar.</p>;
   const max = Math.max(1, ...clean.map((d) => d.value));
@@ -395,7 +393,7 @@ function BarChart({ data, color = '#4F7A5B', valueFormat = (v) => v, height = 15
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, height, overflowX: 'auto', padding: '4px 4px 0' }}>
       {clean.map((d, i) => (
         <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 46, flex: '0 0 auto' }}>
-          <span className="mt-mono" style={{ fontSize: 10.5, color: '#20291F', marginBottom: 4, whiteSpace: 'nowrap' }}>{valueFormat(d.value)}</span>
+          <span className="mt-mono" style={{ fontSize: 10.5, color: '#16181D', marginBottom: 4, whiteSpace: 'nowrap' }}>{valueFormat(d.value)}</span>
           <div style={{ width: 30, height: Math.max(3, (d.value / max) * (height - 46)), background: color, borderRadius: '4px 4px 0 0' }} />
           <span className="mt-mono muted" style={{ fontSize: 10, marginTop: 6, whiteSpace: 'nowrap' }}>{d.label}</span>
         </div>
@@ -415,11 +413,11 @@ function TrendChart({ movements }) {
     .map(([date, value]) => ({ label: date.slice(5).replace('-', '/'), value }));
 
   if (data.length === 0) return <p className="muted" style={{ fontSize: 12 }}>Todavía no hay ventas registradas para graficar la tendencia.</p>;
-  return <BarChart data={data} color="#4F7A5B" valueFormat={euro} height={140} />;
+  return <BarChart data={data} color="#3D7A5C" valueFormat={euro} height={140} />;
 }
 
 function SectionTitle({ children }) {
-  return <div className="mt-display" style={{ fontSize: 14, fontWeight: 700, letterSpacing: 0.3, margin: '4px 0 10px', color: '#20291F' }}>{children}</div>;
+  return <div className="mt-display" style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.1px', margin: '4px 0 12px', color: '#16181D' }}>{children}</div>;
 }
 
 function getProductStock(product, movements) {
@@ -514,9 +512,9 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
 
   return (
     <div>
-      <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#C98A2C' : '#CFC6AC' }}>
+      <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#B8791A' : '#E1E3E8' }}>
         {editingId && (
-          <div className="mt-mono" style={{ fontSize: 11, color: '#C98A2C', marginBottom: 10 }}>
+          <div className="mt-mono" style={{ fontSize: 11, color: '#B8791A', marginBottom: 10 }}>
             Editando movimiento existente
           </div>
         )}
@@ -558,7 +556,7 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
             {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Registrar</>}
           </button>
           {editingId && (
-            <button type="button" onClick={cancelEdit} className="mt-btn" style={{ background: 'transparent', color: '#8a8367', border: '1.4px solid #CFC6AC' }}>
+            <button type="button" onClick={cancelEdit} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1.4px solid #E1E3E8' }}>
               <X size={14} /> Cancelar
             </button>
           )}
@@ -567,7 +565,7 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         <SectionTitle>Historial</SectionTitle>
-        <button onClick={() => exportMovementsCsv(filtered, data.products, data.locations, people)} className="mt-btn" style={{ background: '#4F7A5B' }}>
+        <button onClick={() => exportMovementsCsv(filtered, data.products, data.locations, people)} className="mt-btn">
           <Download size={13} /> Exportar CSV ({filtered.length})
         </button>
       </div>
@@ -604,7 +602,7 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
             <button
               onClick={() => setFilters({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' })}
               className="mt-mono"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FBEAE6', border: '1.4px solid #C1442E', color: '#8a2b1a', borderRadius: 5, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FBEAE9', border: '1.4px solid #D8493F', color: '#B23A31', borderRadius: 5, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >
               <X size={13} /> Limpiar filtros
             </button>
@@ -622,7 +620,7 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
               const loc = data.locations.find((l) => l.id === m.locationId);
               const person = people.find((u) => u.id === m.personId);
               return (
-                <tr key={m.id} style={{ background: editingId === m.id ? '#F1ECDD' : 'transparent' }}>
+                <tr key={m.id} style={{ background: editingId === m.id ? '#F7F7F8' : 'transparent' }}>
                   <td className="mt-mono muted">{m.date}</td>
                   <td style={{ fontWeight: 600 }}>{prod?.name || '—'}</td>
                   <td className="mt-mono">{loc?.name || '—'}</td>
@@ -648,7 +646,7 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
 function Field({ label, children }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#8a8367' }}>{label}</span>
+      <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#6B7280' }}>{label}</span>
       {children}
     </label>
   );
@@ -687,21 +685,21 @@ function MockupUploadField({ value, onChange }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {value ? (
           <div style={{ position: 'relative' }}>
-            <img src={value} alt="mockup" style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #CFC6AC' }} />
-            <button type="button" onClick={() => onChange('')} className="icon-btn" style={{ position: 'absolute', top: -8, right: -8, background: '#FBF8EE', border: '1.4px solid #CFC6AC', borderRadius: '50%', padding: 2 }}>
+            <img src={value} alt="mockup" style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #E1E3E8' }} />
+            <button type="button" onClick={() => onChange('')} className="icon-btn" style={{ position: 'absolute', top: -8, right: -8, background: '#FFFFFF', border: '1.4px solid #E1E3E8', borderRadius: '50%', padding: 2 }}>
               <X size={10} />
             </button>
           </div>
         ) : (
-          <ImageOff size={18} color="#8a8367" />
+          <ImageOff size={18} color="#6B7280" />
         )}
-        <label htmlFor={inputId} className="mt-btn" style={{ cursor: 'pointer', fontSize: 12, padding: '7px 10px' }}>
+        <label htmlFor={inputId} className="mt-btn" style={{ cursor: 'pointer' }}>
           {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
           {uploading ? 'Subiendo…' : value ? 'Cambiar' : 'Subir imagen'}
         </label>
         <input id={inputId} type="file" accept="image/*,application/pdf" onChange={handleFile} style={{ display: 'none' }} disabled={uploading} />
       </div>
-      {error && <span className="mt-mono" style={{ fontSize: 10, color: '#C1442E', maxWidth: 160 }}>{error}</span>}
+      {error && <span className="mt-mono" style={{ fontSize: 10, color: '#D8493F', maxWidth: 160 }}>{error}</span>}
     </Field>
   );
 }
@@ -755,16 +753,16 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
           const revenueEstimado = movido * Number(p.price || 0);
           const provider = providers.find((pr) => pr.id === p.providerId);
           return (
-            <Card key={p.id} style={{ padding: 14, flex: '1 1 240px', borderColor: isLow ? '#C1442E' : '#CFC6AC' }}>
+            <Card key={p.id} style={{ padding: 14, flex: '1 1 240px', borderColor: isLow ? '#D8493F' : '#E1E3E8' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {p.mockupUrl && (
-                    <img src={p.mockupUrl} alt={p.name} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #CFC6AC', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                    <img src={p.mockupUrl} alt={p.name} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #E1E3E8', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
                   )}
                   <div>
                     <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                       {p.name}
-                      {isLow && <AlertTriangle size={13} color="#C1442E" />}
+                      {isLow && <AlertTriangle size={13} color="#D8493F" />}
                     </div>
                     <div className="mt-mono muted" style={{ fontSize: 11 }}>{p.category}</div>
                   </div>
@@ -776,7 +774,7 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
                 <span className="muted">Precio</span><span>{euro(p.price)}</span>
                 <span className="muted">Invertido</span><span>{euro(p.invested)}</span>
                 <span className="muted">Stock inicial</span><span>{p.initialStock}</span>
-                <span className="muted">Stock actual</span><span style={{ color: isLow ? '#C1442E' : 'inherit', fontWeight: isLow ? 700 : 400 }}>{p.stockActual}</span>
+                <span className="muted">Stock actual</span><span style={{ color: isLow ? '#D8493F' : 'inherit', fontWeight: isLow ? 700 : 400 }}>{p.stockActual}</span>
                 <span className="muted">Umbral alerta</span><span>{threshold}</span>
                 {p.weight && (<><span className="muted">Peso</span><span>{p.weight}</span></>)}
                 {p.unitsPerPackage && (<><span className="muted">Uds/paquete</span><span>{p.unitsPerPackage}</span></>)}
@@ -785,7 +783,7 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
               <div className="perforation" style={{ margin: '10px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase' }}>Revenue estimado</span>
-                <span className="mt-mono" style={{ fontSize: 15, fontWeight: 700, color: '#C98A2C' }}>{euro(revenueEstimado)}</span>
+                <span className="mt-mono" style={{ fontSize: 15, fontWeight: 700, color: '#B8791A' }}>{euro(revenueEstimado)}</span>
               </div>
               <div className="mt-mono muted" style={{ fontSize: 10, marginTop: 2, marginBottom: isLow ? 10 : 0 }}>({movido} uds movidas × {euro(p.price)})</div>
               {isLow && <PedirMasButton product={p} provider={provider} />}
@@ -806,7 +804,7 @@ function PedirMasButton({ product, provider }) {
       <button
         onClick={() => setOpen(true)}
         className="mt-mono"
-        style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center', background: '#FBEAE6', border: '1.4px solid #C1442E', color: '#8a2b1a', borderRadius: 5, padding: '7px 0', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center', background: '#FBEAE9', border: '1.4px solid #D8493F', color: '#B23A31', borderRadius: 5, padding: '7px 0', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
       >
         <Mail size={13} /> Pedir más
       </button>
@@ -814,7 +812,7 @@ function PedirMasButton({ product, provider }) {
   }
 
   return (
-    <div style={{ background: '#F1ECDD', border: '1.4px dashed #CFC6AC', borderRadius: 6, padding: 10 }}>
+    <div style={{ background: '#F7F7F8', border: '1.4px dashed #E1E3E8', borderRadius: 6, padding: 10 }}>
       {!provider?.email ? (
         <p className="muted" style={{ fontSize: 11.5, margin: 0 }}>Este producto no tiene proveedor con email cargado. Agregalo en la pestaña Proveedores.</p>
       ) : (
@@ -869,9 +867,9 @@ function Ubicaciones({ locations, products, movements, people, onAdd, onRemove, 
           <Card
             key={l.id}
             onClick={() => setSelectedId(l.id === selectedId ? null : l.id)}
-            style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderColor: selectedId === l.id ? '#4F7A5B' : '#CFC6AC' }}
+            style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderColor: selectedId === l.id ? '#3D7A5C' : '#E1E3E8' }}
           >
-            <Store size={15} color="#6B8F71" />
+            <Store size={15} color="#3D7A5C" />
             <span style={{ fontWeight: 600 }}>{l.name}</span>
             <span className="mt-mono muted" style={{ fontSize: 11 }}>{l.type}</span>
             <button onClick={(e) => { e.stopPropagation(); onRemove(l.id); }} className="icon-btn" style={{ marginLeft: 4 }}><X size={13} /></button>
@@ -940,12 +938,12 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
         </div>
         <div>
           <div className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase' }}>Recaudado</div>
-          <div className="mt-mono" style={{ fontSize: 16, fontWeight: 600, color: '#4F7A5B' }}>{euro(totalRecaudado)}</div>
+          <div className="mt-mono" style={{ fontSize: 16, fontWeight: 600, color: '#3D7A5C' }}>{euro(totalRecaudado)}</div>
         </div>
       </div>
 
-      <div className="mt-mono" style={{ fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: '#8a8367', marginBottom: 8 }}>Agregar producto a {location.name}</div>
-      <form onSubmit={submitQuick} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 18, padding: 12, background: '#F1ECDD', borderRadius: 6, border: '1.5px dashed #CFC6AC' }}>
+      <div className="mt-mono" style={{ fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7280', marginBottom: 8 }}>Agregar producto a {location.name}</div>
+      <form onSubmit={submitQuick} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 18, padding: 12, background: '#F7F7F8', borderRadius: 6, border: '1.5px dashed #E1E3E8' }}>
         <Field label="Producto">
           <select className="mt-input" value={quick.productId} onChange={(e) => setQuick({ ...quick, productId: e.target.value })}>
             {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1004,7 +1002,7 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
         style={{
           display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
           background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0',
-          fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: '#8a8367',
+          fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7280',
         }}
       >
         <ChevronDown size={14} style={{ transform: historyOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
@@ -1051,9 +1049,9 @@ function Personas({ people, movements, onAdd, onRemove }) {
   };
   return (
     <div>
-      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 380 }}>
+      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 440 }}>
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <Field label="Nombre"><input className="mt-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Rocío" required /></Field>
+          <Field label="Nombre"><input className="mt-input" style={{ width: 200 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Rocío" required /></Field>
           <button type="submit" className="mt-btn"><Plus size={14} /> Agregar persona</button>
         </form>
       </Card>
@@ -1063,7 +1061,7 @@ function Personas({ people, movements, onAdd, onRemove }) {
           const count = movements.filter((m) => m.personId === u.id).length;
           return (
             <Card key={u.id} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <User size={15} color="#6B8F71" />
+              <User size={15} color="#3D7A5C" />
               <span style={{ fontWeight: 600 }}>{u.name}</span>
               <span className="mt-mono muted" style={{ fontSize: 11 }}>{count} movimiento{count === 1 ? '' : 's'}</span>
               <button onClick={() => onRemove(u.id)} className="icon-btn" style={{ marginLeft: 4 }}><X size={13} /></button>
@@ -1102,7 +1100,7 @@ function Proveedores({ providers, products, onAdd, onRemove }) {
             <Card key={pr.id} style={{ padding: 14, flex: '1 1 220px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Truck size={15} color="#6B8F71" />
+                  <Truck size={15} color="#3D7A5C" />
                   <span style={{ fontWeight: 700 }}>{pr.name}</span>
                 </div>
                 <button onClick={() => onRemove(pr.id)} className="icon-btn"><Trash2 size={13} /></button>
@@ -1123,24 +1121,25 @@ function Proveedores({ providers, products, onAdd, onRemove }) {
 }
 
 const baseStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
-  .mt-root { font-family: 'Poppins', sans-serif; background: #EFEAD9; color: #20291F; }
-  .mt-display { font-family: 'Poppins', sans-serif; }
-  .mt-mono { font-family: 'Poppins', sans-serif; }
-  .muted { color: #8a8367; }
-  .perforation { background-image: radial-gradient(circle, #CFC6AC 1.4px, transparent 1.4px); background-size: 12px 2px; height: 2px; }
-  .tag-card { position: relative; border: 1.4px solid #CFC6AC; background: #FBF8EE; border-radius: 8px; }
-  .mt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .mt-table th { text-align: left; font-family: 'Poppins', sans-serif; font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #8a8367; padding: 10px 14px; border-bottom: 1.4px solid #CFC6AC; }
-  .mt-table td { padding: 9px 14px; border-bottom: 1px solid #E4DFCC; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  .mt-root { font-family: 'Inter', sans-serif; background: #EDEEF1; color: #16181D; }
+  .mt-display { font-family: 'Inter', sans-serif; }
+  .mt-mono { font-family: 'Inter', sans-serif; }
+  .muted { color: #6B7280; }
+  .perforation { background: #EDEEF1; height: 1px; }
+  .tag-card { position: relative; border: 1px solid #EDEEF1; background: #FFFFFF; border-radius: 14px; box-shadow: 0 1px 2px rgba(16,20,24,0.04), 0 1px 1px rgba(16,20,24,0.03); }
+  .mt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .mt-table th { text-align: left; font-family: 'Inter', sans-serif; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: #9CA3AF; font-weight: 600; padding: 10px 14px; border-bottom: 1px solid #EDEEF1; }
+  .mt-table td { padding: 11px 14px; border-bottom: 1px solid #F3F4F6; }
   .mt-table tr:last-child td { border-bottom: none; }
-  .mt-input { border: 1.4px solid #CFC6AC; background: #FBF8EE; border-radius: 5px; padding: 6px 9px; font-size: 13px; font-family: 'Poppins', sans-serif; color: #20291F; }
-  .mt-input:focus { outline: 2px solid #4F7A5B; outline-offset: 1px; }
-  .mt-btn { display: flex; align-items: center; gap: 6px; background: #20291F; color: #FBF8EE; border: none; border-radius: 5px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Poppins', sans-serif; }
-  .mt-btn:hover { background: #34412E; }
-  .icon-btn { background: none; border: none; color: #8a8367; cursor: pointer; padding: 4px; display: flex; }
-  .icon-btn:hover { color: #C1442E; }
-  .tab-btn:hover { color: #20291F; }
+  .mt-input { box-sizing: border-box; height: 38px; border: 1px solid #E1E3E8; background: #FFFFFF; border-radius: 9px; padding: 0 10px; font-size: 13px; font-family: 'Inter', sans-serif; color: #16181D; }
+  .mt-input:focus { outline: 2px solid #3D7A5C; outline-offset: 1px; }
+  .mt-btn { box-sizing: border-box; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #3D7A5C; color: #FFFFFF; border: none; border-radius: 9px; padding: 0 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 0 1px 2px rgba(16,20,24,0.08); transition: background .15s ease, box-shadow .15s ease, transform .1s ease; white-space: nowrap; flex-shrink: 0; }
+  .mt-btn:hover { background: #2F6349; box-shadow: 0 4px 12px rgba(61,122,92,0.28); transform: translateY(-1px); }
+  .mt-btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(16,20,24,0.08); }
+  .icon-btn { background: none; border: none; color: #9CA3AF; cursor: pointer; padding: 4px; display: flex; }
+  .icon-btn:hover { color: #D8493F; }
+  .tab-btn:hover { color: #16181D; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .animate-spin { animation: spin 1s linear infinite; }
 `;
