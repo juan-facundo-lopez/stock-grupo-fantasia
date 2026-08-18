@@ -6,7 +6,7 @@ const STORAGE_KEY = 'merch-tracker-v1';
 
 // Únicos mails autorizados a entrar. La restricción real (a prueba de manipulación)
 // vive en las políticas RLS de Supabase; esto es solo para dar un mensaje claro en pantalla.
-const ALLOWED_EMAILS = ['jflopezsigon@gmail.com', 'gaston@grupofantasia.es'];
+const ALLOWED_EMAILS = ['jflopezsigon@gmail.com', 'gaston.1693@gmail.com'];
 
 const seedData = {
   products: [],
