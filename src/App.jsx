@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download, LogIn, LogOut, ShieldAlert, Menu } from 'lucide-react';
+import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download, LogIn, LogOut, ShieldAlert, Menu, Zap, Minus, Undo2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'merch-tracker-v1';
@@ -235,12 +235,15 @@ export default function MerchTracker() {
     if (!confirmDelete('¿Eliminar este proveedor?')) return;
     persist({ ...data, providers: (data.providers || []).filter((p) => p.id !== id) });
   };
-  const addMovement = (mv) => persist({ ...data, movements: [{ ...mv, id: uid() }, ...data.movements] });
+  // Si mv ya trae un id (ej. "Venta rápida", que lo necesita al toque para poder deshacer) se respeta; si no, se genera uno.
+  const addMovement = (mv) => persist({ ...data, movements: [{ id: uid(), ...mv }, ...data.movements] });
   const updateMovement = (id, updates) => persist({ ...data, movements: data.movements.map((m) => (m.id === id ? { ...m, ...updates } : m)) });
   const removeMovement = (id) => {
     if (!confirmDelete('¿Eliminar este movimiento? No se puede deshacer.')) return;
     persist({ ...data, movements: data.movements.filter((m) => m.id !== id) });
   };
+  // Sin confirmación: para deshacer una venta recién cargada desde "Venta rápida" (mistap inmediato).
+  const undoMovement = (id) => persist({ ...data, movements: data.movements.filter((m) => m.id !== id) });
 
   return (
     <div className="mt-root" style={{ minHeight: '100%' }}>
@@ -268,6 +271,7 @@ export default function MerchTracker() {
         <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, padding: '0 10px 6px' }}>Menú</span>
         {[
           { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, badge: lowStock.length },
+          { id: 'venta-rapida', label: 'Venta rápida', icon: Zap },
           { id: 'movimientos', label: 'Movimientos', icon: ListPlus },
           { id: 'productos', label: 'Productos', icon: Package },
           { id: 'ubicaciones', label: 'Restaurantes', icon: Store },
@@ -320,11 +324,14 @@ export default function MerchTracker() {
           {tab === 'dashboard' && (
             <Dashboard stats={stats} totalRecaudado={totalRecaudado} totalVendido={totalVendido} totalInvertido={totalInvertido} totalStock={totalStock} lowStock={lowStock} locations={data.locations} movements={data.movements} />
           )}
+          {tab === 'venta-rapida' && (
+            <VentaRapida stats={stats} locations={data.locations} people={data.people || []} movements={data.movements} onAdd={addMovement} onUndo={undoMovement} onNavigate={setTab} />
+          )}
           {tab === 'movimientos' && (
-            <Movimientos data={data} onAdd={addMovement} onUpdate={updateMovement} onRemove={removeMovement} />
+            <Movimientos data={data} onAdd={addMovement} onUpdate={updateMovement} onRemove={removeMovement} onNavigate={setTab} />
           )}
           {tab === 'productos' && (
-            <Productos products={data.products} stats={stats} providers={data.providers || []} onAdd={addProduct} onRemove={removeProduct} />
+            <Productos products={data.products} stats={stats} providers={data.providers || []} onAdd={addProduct} onUpdate={updateProduct} onRemove={removeProduct} />
           )}
           {tab === 'ubicaciones' && (
             <Ubicaciones locations={data.locations} products={data.products} movements={data.movements} people={data.people || []} onAdd={addLocation} onRemove={removeLocation} onAddMovement={addMovement} onUpdateMovement={updateMovement} onRemoveMovement={removeMovement} />
@@ -412,21 +419,36 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
         <table className="mt-table">
           <thead>
             <tr>
-              <th>Producto</th><th>Categoría</th><th>Stock</th><th>Vendido</th><th>Recaudado</th><th>Falladas</th><th>Regaladas</th>
+              <th>Producto</th><th>Categoría</th><th>Stock</th><th>Vendido</th><th>Recaudado</th><th>% Recuperado</th><th>Falladas</th><th>Regaladas</th>
             </tr>
           </thead>
           <tbody>
-            {stats.map((p) => (
-              <tr key={p.id}>
-                <td style={{ fontWeight: 600 }}>{p.name}</td>
-                <td className="mt-mono muted">{p.category}</td>
-                <td className="mt-mono" style={{ color: p.stockActual < 20 ? '#D8493F' : 'inherit' }}>{p.stockActual}</td>
-                <td className="mt-mono">{p.vendido}</td>
-                <td className="mt-mono">{euro(p.recaudado)}</td>
-                <td className="mt-mono muted">{p.fallada}</td>
-                <td className="mt-mono muted">{p.regalada}</td>
-              </tr>
-            ))}
+            {stats.map((p) => {
+              const pct = Number(p.invested) > 0 ? (p.recaudado / Number(p.invested)) * 100 : null;
+              return (
+                <tr key={p.id}>
+                  <td style={{ fontWeight: 600 }}>{p.name}</td>
+                  <td className="mt-mono muted">{p.category}</td>
+                  <td className="mt-mono" style={{ color: p.stockActual < (Number(p.lowStockThreshold) || 20) ? '#D8493F' : 'inherit' }}>{p.stockActual}</td>
+                  <td className="mt-mono">{p.vendido}</td>
+                  <td className="mt-mono">{euro(p.recaudado)}</td>
+                  <td className="mt-mono">
+                    {pct === null ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ minWidth: 34, fontWeight: pct >= 100 ? 700 : 400, color: pct >= 100 ? '#3D7A5C' : 'inherit' }}>{pct.toFixed(0)}%</span>
+                        <div style={{ width: 50, height: 5, borderRadius: 3, background: '#EDEEF1', overflow: 'hidden', flexShrink: 0 }}>
+                          <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: pct >= 100 ? '#3D7A5C' : '#B8791A' }} />
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="mt-mono muted">{p.fallada}</td>
+                  <td className="mt-mono muted">{p.regalada}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -543,7 +565,7 @@ const emptyMovForm = (products, locations, people) => ({
   type: 'venta', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '',
 });
 
-function Movimientos({ data, onAdd, onUpdate, onRemove }) {
+function Movimientos({ data, onAdd, onUpdate, onRemove, onNavigate }) {
   const people = data.people || [];
   const [form, setForm] = useState(() => emptyMovForm(data.products, data.locations, people));
   const [editingId, setEditingId] = useState(null);
@@ -598,9 +620,32 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
     return true;
   });
   const filtersActive = Object.values(filters).some(Boolean);
+  const noProducts = data.products.length === 0;
+  const noLocations = data.locations.length === 0;
 
   return (
     <div>
+      {(noProducts || noLocations) && (
+        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FFF8E8', border: '1px solid #F0D9A8', color: '#8A6416', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16 }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 200 }}>
+            Todavía no cargaste {noProducts && noLocations ? 'productos ni restaurantes' : noProducts ? 'productos' : 'restaurantes'} — hace falta al menos uno de cada uno para poder registrar movimientos.
+          </span>
+          <span style={{ display: 'flex', gap: 8 }}>
+            {noProducts && (
+              <button type="button" onClick={() => onNavigate('productos')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                Ir a Productos
+              </button>
+            )}
+            {noLocations && (
+              <button type="button" onClick={() => onNavigate('ubicaciones')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                Ir a Restaurantes
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
       <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#B8791A' : '#E1E3E8' }}>
         {editingId && (
           <div className="mt-mono" style={{ fontSize: 11, color: '#B8791A', marginBottom: 10 }}>
@@ -732,6 +777,129 @@ function Movimientos({ data, onAdd, onUpdate, onRemove }) {
   );
 }
 
+const QS_LOCATION_KEY = 'merch-tracker-qs-location';
+const QS_PERSON_KEY = 'merch-tracker-qs-person';
+
+function VentaRapida({ stats, locations, people, movements, onAdd, onUndo, onNavigate }) {
+  const restaurantes = locations.filter((l) => l.type === 'restaurante');
+  const [locationId, setLocationId] = useState(() => localStorage.getItem(QS_LOCATION_KEY) || '');
+  const [personId, setPersonId] = useState(() => localStorage.getItem(QS_PERSON_KEY) || '');
+  const [qtyByProduct, setQtyByProduct] = useState({});
+  const [flash, setFlash] = useState(null); // { text, movementId }
+
+  useEffect(() => {
+    if (locationId) localStorage.setItem(QS_LOCATION_KEY, locationId);
+  }, [locationId]);
+  useEffect(() => {
+    if (personId) localStorage.setItem(QS_PERSON_KEY, personId);
+    else localStorage.removeItem(QS_PERSON_KEY);
+  }, [personId]);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 4000);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const setQty = (productId, qty) => setQtyByProduct((q) => ({ ...q, [productId]: Math.max(1, qty) }));
+
+  const registerSale = (product) => {
+    if (!locationId) { setFlash({ text: 'Elegí un restaurante primero.' }); return; }
+    const qty = qtyByProduct[product.id] || 1;
+    const amount = qty * Number(product.price || 0);
+    const movementId = uid();
+    onAdd({ id: movementId, productId: product.id, locationId, personId, type: 'venta', quantity: qty, amount, date: today, note: '' });
+    setQtyByProduct((q) => ({ ...q, [product.id]: 1 }));
+    setFlash({ text: `Vendido: ${qty} × ${product.name} (${euro(amount)})`, movementId });
+  };
+
+  return (
+    <div>
+      <Card style={{ padding: 16, marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Field label="Restaurante">
+            <select className="mt-input" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+              <option value="">Elegir…</option>
+              {restaurantes.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Quién vende">
+            <select className="mt-input" value={personId} onChange={(e) => setPersonId(e.target.value)}>
+              <option value="">—</option>
+              {people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div className="mt-mono muted" style={{ fontSize: 11, marginTop: 8 }}>
+          Quedan elegidos hasta que los cambies. Tocá "Vender" en un producto para registrar la venta al instante.
+        </div>
+      </Card>
+
+      {flash && (
+        <div className="mt-mono" style={{ background: '#E8F2EC', border: '1px solid #BFE0CC', color: '#3D7A5C', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span>{flash.text}</span>
+          {flash.movementId && (
+            <button
+              onClick={() => { onUndo(flash.movementId); setFlash(null); }}
+              className="mt-mono"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'transparent', border: '1.4px solid #3D7A5C', color: '#3D7A5C', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}
+            >
+              <Undo2 size={12} /> Deshacer
+            </button>
+          )}
+        </div>
+      )}
+
+      {restaurantes.length === 0 ? (
+        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FFF8E8', border: '1px solid #F0D9A8', color: '#8A6416', padding: '10px 14px', borderRadius: 12, fontSize: 12.5 }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 200 }}>Todavía no cargaste ningún restaurante — hace falta al menos uno para poder vender.</span>
+          <button type="button" onClick={() => onNavigate('ubicaciones')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+            Ir a Restaurantes
+          </button>
+        </div>
+      ) : !locationId ? (
+        <p className="muted" style={{ fontSize: 13 }}>Elegí un restaurante arriba para empezar a vender.</p>
+      ) : stats.length === 0 ? (
+        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FFF8E8', border: '1px solid #F0D9A8', color: '#8A6416', padding: '10px 14px', borderRadius: 12, fontSize: 12.5 }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 200 }}>Todavía no cargaste ningún producto — hace falta al menos uno para poder vender.</span>
+          <button type="button" onClick={() => onNavigate('productos')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+            Ir a Productos
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          {stats.map((p) => {
+            const qty = qtyByProduct[p.id] || 1;
+            const sinStock = p.stockActual <= 0;
+            return (
+              <Card key={p.id} style={{ padding: 14, flex: '1 1 200px', opacity: sinStock ? 0.5 : 1 }}>
+                <div style={{ fontWeight: 700 }}>{p.name}</div>
+                <div className="mt-mono muted" style={{ fontSize: 11, marginBottom: 10 }}>{euro(p.price)} · stock {p.stockActual}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                  <button type="button" disabled={sinStock} onClick={() => setQty(p.id, qty - 1)} className="icon-btn"><Minus size={13} /></button>
+                  <span className="mt-mono" style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{qty}</span>
+                  <button type="button" disabled={sinStock} onClick={() => setQty(p.id, qty + 1)} className="icon-btn"><Plus size={13} /></button>
+                </div>
+                <button
+                  type="button"
+                  disabled={sinStock}
+                  onClick={() => registerSale(p)}
+                  className="mt-btn"
+                  style={{ width: '100%', justifyContent: 'center', opacity: sinStock ? 0.6 : 1, cursor: sinStock ? 'not-allowed' : 'pointer' }}
+                >
+                  {sinStock ? 'Sin stock' : <><Zap size={13} /> Vender{qty > 1 ? ` ×${qty}` : ''}</>}
+                </button>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Field({ label, children }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -793,21 +961,50 @@ function MockupUploadField({ value, onChange }) {
   );
 }
 
-function Productos({ products, stats, providers, onAdd, onRemove }) {
-  const [form, setForm] = useState({ name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' });
+const emptyProductForm = { name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' };
+
+function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
+  const [form, setForm] = useState(emptyProductForm);
+  const [editingId, setEditingId] = useState(null);
+
   const submit = (e) => {
     e.preventDefault();
     if (!form.name) return;
-    onAdd({
+    const payload = {
       name: form.name, category: form.category || 'Merch', price: Number(form.price) || 0, invested: Number(form.invested) || 0,
       initialStock: Number(form.initialStock) || 0, lowStockThreshold: Number(form.lowStockThreshold) || 20,
       providerId: form.providerId, weight: form.weight, unitsPerPackage: form.unitsPerPackage, mockupUrl: form.mockupUrl,
-    });
-    setForm({ name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' });
+    };
+    if (editingId) {
+      onUpdate(editingId, payload);
+      setEditingId(null);
+    } else {
+      onAdd(payload);
+    }
+    setForm(emptyProductForm);
   };
+
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setForm({
+      name: p.name, category: p.category || 'Merch', price: p.price ? String(p.price) : '', invested: p.invested ? String(p.invested) : '',
+      initialStock: p.initialStock ? String(p.initialStock) : '', lowStockThreshold: p.lowStockThreshold ? String(p.lowStockThreshold) : '20',
+      providerId: p.providerId || '', weight: p.weight || '', unitsPerPackage: p.unitsPerPackage ? String(p.unitsPerPackage) : '', mockupUrl: p.mockupUrl || '',
+    });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyProductForm);
+  };
+
   return (
     <div>
-      <Card style={{ padding: 16, marginBottom: 20 }}>
+      <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#B8791A' : '#E1E3E8' }}>
+        {editingId && (
+          <div className="mt-mono" style={{ fontSize: 14, fontWeight: 700, color: '#B8791A', marginBottom: 10 }}>
+            Editando: {form.name || '—'}
+          </div>
+        )}
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="Nombre"><input className="mt-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
           <Field label="Categoría">
@@ -831,7 +1028,14 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
           <Field label="Peso / medida"><input className="mt-input" style={{ width: 100 }} placeholder="ej. 250g" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></Field>
           <Field label="Uds. por paquete"><input className="mt-input" type="number" style={{ width: 100 }} value={form.unitsPerPackage} onChange={(e) => setForm({ ...form, unitsPerPackage: e.target.value })} /></Field>
           <MockupUploadField value={form.mockupUrl} onChange={(url) => setForm({ ...form, mockupUrl: url })} />
-          <button type="submit" className="mt-btn"><Plus size={14} /> Agregar</button>
+          <button type="submit" className="mt-btn">
+            {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar</>}
+          </button>
+          {editingId && (
+            <button type="button" onClick={cancelEdit} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1.4px solid #E1E3E8' }}>
+              <X size={14} /> Cancelar
+            </button>
+          )}
         </form>
       </Card>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
@@ -842,7 +1046,7 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
           const revenueEstimado = movido * Number(p.price || 0);
           const provider = providers.find((pr) => pr.id === p.providerId);
           return (
-            <Card key={p.id} style={{ padding: 14, flex: '1 1 240px', borderColor: isLow ? '#D8493F' : '#E1E3E8' }}>
+            <Card key={p.id} style={{ padding: 14, flex: '1 1 240px', borderColor: editingId === p.id ? '#B8791A' : (isLow ? '#D8493F' : '#E1E3E8') }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {p.mockupUrl && (
@@ -856,7 +1060,10 @@ function Productos({ products, stats, providers, onAdd, onRemove }) {
                     <div className="mt-mono muted" style={{ fontSize: 11 }}>{p.category}</div>
                   </div>
                 </div>
-                <button onClick={() => onRemove(p.id)} className="icon-btn"><Trash2 size={13} /></button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button onClick={() => startEdit(p)} className="icon-btn"><Pencil size={13} /></button>
+                  <button onClick={() => onRemove(p.id)} className="icon-btn"><Trash2 size={13} /></button>
+                </div>
               </div>
               <div className="perforation" style={{ margin: '10px 0' }} />
               <div className="mt-mono" style={{ fontSize: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
@@ -1223,11 +1430,13 @@ const baseStyles = `
   .mt-table tr:last-child td { border-bottom: none; }
   .mt-input { box-sizing: border-box; height: 38px; border: 1px solid #E1E3E8; background: #FFFFFF; border-radius: 9px; padding: 0 10px; font-size: 13px; font-family: 'Inter', sans-serif; color: #16181D; }
   .mt-input:focus { outline: 2px solid #3D7A5C; outline-offset: 1px; }
-  .mt-btn { box-sizing: border-box; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #3D7A5C; color: #FFFFFF; border: none; border-radius: 9px; padding: 0 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 0 1px 2px rgba(16,20,24,0.08); transition: background .15s ease, box-shadow .15s ease, transform .1s ease; white-space: nowrap; flex-shrink: 0; }
+  .mt-btn { box-sizing: border-box; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #3D7A5C; color: #FFFFFF; border: none; border-radius: 9px; padding: 0 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 0 1px 2px rgba(16,20,24,0.08); transition: background .15s ease, box-shadow .15s ease, transform .1s ease; white-space: nowrap; flex-shrink: 0; }
   .mt-btn:hover { background: #2F6349; box-shadow: 0 4px 12px rgba(61,122,92,0.28); transform: translateY(-1px); }
   .mt-btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(16,20,24,0.08); }
-  .icon-btn { background: none; border: none; color: #9CA3AF; cursor: pointer; padding: 4px; display: flex; }
-  .icon-btn:hover { color: #D8493F; }
+  .icon-btn { background: none; border: none; color: #9CA3AF; cursor: pointer; padding: 8px; display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; border-radius: 8px; }
+  .icon-btn:hover { color: #D8493F; background: #F7F7F8; }
+  .icon-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+  .icon-btn:disabled:hover { background: none; color: #9CA3AF; }
   .tab-btn:hover { color: #16181D; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .animate-spin { animation: spin 1s linear infinite; }
