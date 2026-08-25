@@ -469,7 +469,7 @@ export default function MerchTracker() {
           )}
 
           {tab === 'dashboard' && (
-            <Dashboard stats={stats} totalRecaudado={totalRecaudado} totalVendido={totalVendido} totalInvertido={totalInvertido} totalStock={totalStock} lowStock={lowStock} locations={data.locations} movements={data.movements} />
+            <Dashboard stats={stats} totalRecaudado={totalRecaudado} totalVendido={totalVendido} totalInvertido={totalInvertido} totalStock={totalStock} totalStockDeposito={totalStockDeposito} lowStock={lowStock} locations={data.locations} movements={data.movements} />
           )}
           {tab === 'venta-rapida' && (
             <VentaRapida stats={stats} locations={data.locations} people={people} movements={data.movements} onAdd={addMovement} onUndo={undoMovement} onNavigate={setTab} />
@@ -541,7 +541,7 @@ function KpiCard({ label, value, accent }) {
   );
 }
 
-function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalStock, lowStock, locations, movements }) {
+function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalStock, totalStockDeposito, lowStock, locations, movements }) {
   const restaurantes = locations.filter((l) => l.type === 'restaurante');
 
   const [dateFrom, setDateFrom] = useState('');
