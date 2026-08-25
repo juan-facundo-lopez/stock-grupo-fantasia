@@ -34,7 +34,6 @@ const LOCATION_TYPE_META = {
 
 const euro = (n) => `€${(Number(n) || 0).toFixed(2)}`;
 const uid = () => Math.random().toString(36).slice(2, 10);
-const confirmDelete = (msg) => window.confirm(msg || '¿Seguro que querés eliminar esto? No se puede deshacer.');
 // Búsqueda de Google Maps por texto — no hace falta API key ni configuración extra.
 const mapsUrl = (address) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
@@ -344,6 +343,8 @@ export default function MerchTracker() {
     }
   }, []);
 
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
+
   if (cloudOn && session === undefined) {
     return (
       <div className="mt-root" style={{ padding: 40, textAlign: 'center' }}>
@@ -388,32 +389,32 @@ export default function MerchTracker() {
 
   const addProduct = (product) => persist({ ...data, products: [...data.products, { ...product, id: uid() }] });
   const updateProduct = (id, updates) => persist({ ...data, products: data.products.map((p) => (p.id === id ? { ...p, ...updates } : p)) });
-  const removeProduct = (id) => {
-    if (!confirmDelete('¿Eliminar este producto? También se van a borrar todos sus movimientos registrados.')) return;
+  const removeProduct = async (id) => {
+    if (!(await askConfirm('¿Eliminar este producto? También se van a borrar todos sus movimientos registrados.'))) return;
     persist({ ...data, products: data.products.filter((p) => p.id !== id), movements: data.movements.filter((m) => m.productId !== id) });
   };
   const addLocation = (loc) => persist({ ...data, locations: [...data.locations, { ...loc, id: uid() }] });
   const updateLocation = (id, updates) => persist({ ...data, locations: data.locations.map((l) => (l.id === id ? { ...l, ...updates } : l)) });
-  const removeLocation = (id) => {
-    if (!confirmDelete('¿Eliminar este punto de venta/ubicación?')) return;
+  const removeLocation = async (id) => {
+    if (!(await askConfirm('¿Eliminar este punto de venta/ubicación?'))) return;
     persist({ ...data, locations: data.locations.filter((l) => l.id !== id) });
   };
   const addPerson = (person) => persist({ ...data, people: [...(data.people || []), { ...person, id: uid() }] });
-  const removePerson = (id) => {
-    if (!confirmDelete('¿Eliminar esta persona del equipo?')) return;
+  const removePerson = async (id) => {
+    if (!(await askConfirm('¿Eliminar esta persona del equipo?'))) return;
     persist({ ...data, people: (data.people || []).filter((u) => u.id !== id) });
   };
   const addProvider = (provider) => persist({ ...data, providers: [...(data.providers || []), { ...provider, id: uid() }] });
   const updateProvider = (id, updates) => persist({ ...data, providers: (data.providers || []).map((p) => (p.id === id ? { ...p, ...updates } : p)) });
-  const removeProvider = (id) => {
-    if (!confirmDelete('¿Eliminar este proveedor?')) return;
+  const removeProvider = async (id) => {
+    if (!(await askConfirm('¿Eliminar este proveedor?'))) return;
     persist({ ...data, providers: (data.providers || []).filter((p) => p.id !== id) });
   };
   // Si mv ya trae un id (ej. "Venta rápida", que lo necesita al toque para poder deshacer) se respeta; si no, se genera uno.
   const addMovement = (mv) => persist({ ...data, movements: [{ id: uid(), ...mv }, ...data.movements] });
   const updateMovement = (id, updates) => persist({ ...data, movements: data.movements.map((m) => (m.id === id ? { ...m, ...updates } : m)) });
-  const removeMovement = (id) => {
-    if (!confirmDelete('¿Eliminar este movimiento? No se puede deshacer.')) return;
+  const removeMovement = async (id) => {
+    if (!(await askConfirm('¿Eliminar este movimiento? No se puede deshacer.'))) return;
     persist({ ...data, movements: data.movements.filter((m) => m.id !== id) });
   };
   // Sin confirmación: para deshacer una venta recién cargada desde "Venta rápida" (mistap inmediato).
@@ -422,6 +423,7 @@ export default function MerchTracker() {
   return (
     <div className="mt-root" style={{ minHeight: '100%' }}>
       <style>{baseStyles}</style>
+      {confirmDialog}
 
       {!mobileNavOpen && (
         <button onClick={() => setMobileNavOpen(true)} className="mt-hamburger" aria-label="Abrir menú">
