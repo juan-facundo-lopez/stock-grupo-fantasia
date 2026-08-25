@@ -133,6 +133,55 @@ function ConfirmContent({ children }) {
   );
 }
 
+// Reemplaza al window.confirm() nativo (que se ve feo y desentona con el resto de la app) por un
+// modal propio, con la misma estética que el resto de las tarjetas. Uso: const { confirm, dialog } =
+// useConfirmDialog(); en el JSX se renderiza {dialog}; y en el handler: if (!(await confirm('¿Seguro?'))) return;
+function useConfirmDialog() {
+  const [pending, setPending] = useState(null); // { message }
+  const resolveRef = useRef(null);
+
+  const confirm = useCallback((message) => {
+    return new Promise((resolve) => {
+      resolveRef.current = resolve;
+      setPending({ message });
+    });
+  }, []);
+
+  const answer = (value) => {
+    resolveRef.current?.(value);
+    resolveRef.current = null;
+    setPending(null);
+  };
+
+  const dialog = pending ? (
+    <div
+      onClick={() => answer(false)}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(16,20,24,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="tag-card"
+        style={{ maxWidth: 380, width: '100%', padding: 18 }}
+      >
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 18 }}>
+          <AlertTriangle size={18} color="#D8493F" style={{ flexShrink: 0, marginTop: 1 }} />
+          <p className="mt-mono" style={{ fontSize: 13, lineHeight: 1.5, margin: 0 }}>{pending.message}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={() => answer(false)} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1.4px solid #E1E3E8' }}>
+            Cancelar
+          </button>
+          <button type="button" onClick={() => answer(true)} className="mt-btn" style={{ background: '#D8493F' }}>
+            Confirmar igual
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  return { confirm, dialog };
+}
+
 export default function MerchTracker() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -329,7 +378,7 @@ export default function MerchTracker() {
   const totalInvertido = data.products.reduce((s, p) => s + Number(p.invested), 0);
   const totalStock = stats.reduce((s, p) => s + p.stockActual, 0);
   const totalStockDeposito = stats.reduce((s, p) => s + p.stockDeposito, 0);
-  const lowStock = stats.filter((p) => p.stockActual > 0 && p.stockActual < (Number(p.lowStockThreshold) || 20));
+  const lowStock = stats.filter((p) => p.stockDeposito > 0 && p.stockDeposito < (Number(p.lowStockThreshold) || 20));
 
   // "Quién" combina a la gente del equipo con cuenta de Google (automático) con las
   // personas cargadas a mano (para casos sin cuenta, como ayuda puntual en un evento).
@@ -602,7 +651,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FBEAE9', border: '1px solid #F5C6C2', borderRadius: 12, padding: '10px 14px', marginBottom: 20 }}>
           <AlertTriangle size={15} color="#D8493F" />
           <span className="mt-mono" style={{ fontSize: 12.5, color: '#B23A31' }}>
-            Stock bajo: {lowStock.map((p) => `${p.name} (${p.stockActual})`).join(', ')}
+            Stock bajo en depósito: {lowStock.map((p) => `${p.name} (${p.stockDeposito})`).join(', ')}
           </span>
         </div>
       )}
@@ -633,8 +682,8 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
                     </div>
                   </td>
                   <td className="mt-mono muted">{p.category}</td>
-                  <td className="mt-mono" style={{ color: p.stockActual < (Number(p.lowStockThreshold) || 20) ? '#D8493F' : 'inherit' }}>{p.stockActual}</td>
-                  <td className="mt-mono" style={{ color: p.stockDeposito < 0 ? '#D8493F' : 'inherit' }}>{p.stockDeposito}</td>
+                  <td className="mt-mono">{p.stockActual}</td>
+                  <td className="mt-mono" style={{ color: p.stockDeposito < (Number(p.lowStockThreshold) || 20) ? '#D8493F' : 'inherit' }}>{p.stockDeposito}</td>
                   <td className="mt-mono">{p.vendido}</td>
                   <td className="mt-mono">{euro(p.recaudado)}</td>
                   <td className="mt-mono">
@@ -783,8 +832,9 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
   const [editingId, setEditingId] = useState(null);
   const [filters, setFilters] = useState({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' });
   const [confirmRef, triggerConfirm] = useConfirmMorph();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     if (!form.productId || !form.quantity) return;
     const qty = Number(form.quantity);
@@ -797,7 +847,7 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
           if (prev && prev.productId === form.productId && ['venta', 'fallada', 'regalada'].includes(prev.type)) currentStock += Number(prev.quantity);
         }
         if (qty > currentStock) {
-          const ok = window.confirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
@@ -811,7 +861,7 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
           if (prev && prev.productId === form.productId && prev.type === 'entrega') currentDeposito += Number(prev.quantity);
         }
         if (qty > currentDeposito) {
-          const ok = window.confirm(`Ojo: en el depósito quedan ${currentDeposito} de "${product.name}" y estás entregando ${qty}. ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: en el depósito quedan ${currentDeposito} de "${product.name}" y estás entregando ${qty}. ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
@@ -853,6 +903,7 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
 
   return (
     <div>
+      {confirmDialog}
       {(noProducts || noLocations) && (
         <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FFF8E8', border: '1px solid #F0D9A8', color: '#8A6416', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16 }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
@@ -1336,10 +1387,10 @@ const PRODUCT_SORT_OPTIONS = [
 ];
 
 function sortProductStats(list, sortBy) {
-  const withFlags = list.map((p) => ({ ...p, _isLow: p.stockActual > 0 && p.stockActual < (Number(p.lowStockThreshold) || 20) }));
+  const withFlags = list.map((p) => ({ ...p, _isLow: p.stockDeposito > 0 && p.stockDeposito < (Number(p.lowStockThreshold) || 20) }));
   switch (sortBy) {
     case 'stock-low':
-      return withFlags.sort((a, b) => (b._isLow - a._isLow) || (a.stockActual - b.stockActual));
+      return withFlags.sort((a, b) => (b._isLow - a._isLow) || (a.stockDeposito - b.stockDeposito));
     case 'stock-desc':
       return withFlags.sort((a, b) => b.stockActual - a.stockActual);
     case 'stock-asc':
@@ -1448,7 +1499,7 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
         {visibleStats.map((p) => {
           const threshold = Number(p.lowStockThreshold) || 20;
-          const isLow = p.stockActual > 0 && p.stockActual < threshold;
+          const isLow = p.stockDeposito > 0 && p.stockDeposito < threshold;
           const movido = Math.max(0, Number(p.initialStock) - p.stockActual);
           const revenueEstimado = movido * Number(p.price || 0);
           const provider = providers.find((pr) => pr.id === p.providerId);
@@ -1477,8 +1528,8 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
                 <span className="muted">Precio</span><span>{euro(p.price)}</span>
                 <span className="muted">Invertido</span><span>{euro(p.invested)}</span>
                 <span className="muted">Stock inicial</span><span>{p.initialStock}</span>
-                <span className="muted">Stock actual</span><span style={{ color: isLow ? '#D8493F' : 'inherit', fontWeight: isLow ? 700 : 400 }}>{p.stockActual}</span>
-                <span className="muted">Stock en depósito</span><span style={{ color: p.stockDeposito < 0 ? '#D8493F' : 'inherit' }}>{p.stockDeposito}</span>
+                <span className="muted">Stock actual</span><span>{p.stockActual}</span>
+                <span className="muted">Stock en depósito</span><span style={{ color: isLow ? '#D8493F' : 'inherit', fontWeight: isLow ? 700 : 400 }}>{p.stockDeposito}</span>
                 <span className="muted">Umbral alerta</span><span>{threshold}</span>
                 {p.weight && (<><span className="muted">Peso</span><span>{p.weight}</span></>)}
                 {p.unitsPerPackage && (<><span className="muted">Uds/paquete</span><span>{p.unitsPerPackage}</span></>)}
@@ -1685,8 +1736,9 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
   const [quick, setQuick] = useState({ productId: products[0]?.id || '', personId: people[0]?.id || '', type: 'entrega', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10) });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [confirmRef, triggerConfirm] = useConfirmMorph();
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
 
-  const submitQuick = (e) => {
+  const submitQuick = async (e) => {
     e.preventDefault();
     if (!quick.productId || !quick.quantity) return;
     const qty = Number(quick.quantity);
@@ -1695,7 +1747,7 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
       if (product) {
         const currentStock = getProductStock(product, movements);
         if (qty > currentStock) {
-          const ok = window.confirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
@@ -1705,7 +1757,7 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
       if (product) {
         const currentDeposito = getProductStockDeposito(product, movements);
         if (qty > currentDeposito) {
-          const ok = window.confirm(`Ojo: en el depósito quedan ${currentDeposito} de "${product.name}" y estás entregando ${qty}. ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: en el depósito quedan ${currentDeposito} de "${product.name}" y estás entregando ${qty}. ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
@@ -1732,6 +1784,7 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
 
   return (
     <Card style={{ padding: 16 }}>
+      {confirmDialog}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {location.logoUrl && (
