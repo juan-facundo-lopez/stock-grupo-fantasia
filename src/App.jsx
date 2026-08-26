@@ -57,7 +57,7 @@ function waUrl(phone, phoneCountry) {
   return `https://wa.me/${digits}`;
 }
 
-function buildOrderMailto(product, provider, qty) {
+function buildOrderMailto(product, provider, qty, lowVariants) {
   const subject = `Pedido de reposición: ${product.name}`;
   const lines = [
     `Hola${provider?.name ? ' ' + provider.name : ''},`,
@@ -65,6 +65,9 @@ function buildOrderMailto(product, provider, qty) {
     `Necesitamos reponer stock de "${product.name}".`,
     `Cantidad solicitada: ${qty} unidades`,
   ];
+  if (lowVariants && lowVariants.length > 0) {
+    lines.push('', 'Variantes con stock bajo puntual:', ...lowVariants.map((v) => `- ${v.label}: quedan ${v.stockDeposito}`));
+  }
   if (product.unitsPerPackage) lines.push(`Unidades por paquete: ${product.unitsPerPackage}`);
   if (product.weight) lines.push(`Peso / medida: ${product.weight}`);
   if (product.mockupUrl) lines.push('', `Mockup / referencia: ${product.mockupUrl}`);
@@ -75,6 +78,29 @@ function buildOrderMailto(product, provider, qty) {
 
 function computeStats(products, movements) {
   return products.map((p) => {
+    if (hasVariants(p)) {
+      // Producto con variantes: el stock/plata de cada variante se calcula por separado
+      // (filtrando también por variantId), y el producto muestra la suma de todas.
+      const variantStats = (p.variants || []).map((v) => {
+        const vm = movements.filter((m) => m.productId === p.id && m.variantId === v.id);
+        const vendido = vm.filter((m) => m.type === 'venta').reduce((s, m) => s + Number(m.quantity), 0);
+        const recaudado = vm.filter((m) => m.type === 'venta').reduce((s, m) => s + Number(m.amount), 0);
+        const fallada = vm.filter((m) => m.type === 'fallada').reduce((s, m) => s + Number(m.quantity), 0);
+        const regalada = vm.filter((m) => m.type === 'regalada').reduce((s, m) => s + Number(m.quantity), 0);
+        const ingreso = vm.filter((m) => m.type === 'ingreso').reduce((s, m) => s + Number(m.quantity), 0);
+        const entrega = vm.filter((m) => m.type === 'entrega').reduce((s, m) => s + Number(m.quantity), 0);
+        const stockActual = Number(v.initialStock) + ingreso - vendido - fallada - regalada;
+        const stockDeposito = Number(v.initialStock) + ingreso - entrega;
+        return { ...v, label: variantLabel(p, v), vendido, recaudado, fallada, regalada, stockActual, stockDeposito };
+      });
+      const sum = (key) => variantStats.reduce((s, v) => s + v[key], 0);
+      return {
+        ...p,
+        variantStats,
+        vendido: sum('vendido'), recaudado: sum('recaudado'), fallada: sum('fallada'), regalada: sum('regalada'),
+        stockActual: sum('stockActual'), stockDeposito: sum('stockDeposito'),
+      };
+    }
     const pm = movements.filter((m) => m.productId === p.id);
     const vendido = pm.filter((m) => m.type === 'venta').reduce((s, m) => s + Number(m.quantity), 0);
     const recaudado = pm.filter((m) => m.type === 'venta').reduce((s, m) => s + Number(m.amount), 0);
@@ -87,8 +113,74 @@ function computeStats(products, movements) {
     // sube con "ingreso" y baja con "entrega" (no con venta/fallada/regalada, porque esas
     // unidades ya salieron del depósito en el momento de la entrega, no al venderse).
     const stockDeposito = Number(p.initialStock) + ingreso - entrega;
-    return { ...p, vendido, recaudado, fallada, regalada, stockActual, stockDeposito };
+    return { ...p, variantStats: null, vendido, recaudado, fallada, regalada, stockActual, stockDeposito };
   });
+}
+
+// --- Variantes de producto (atributos + combinaciones) ---
+// Un producto solo tiene variantes si define al menos un atributo (ej. "Color").
+// Las variantes no se tipean como texto libre: son la combinación de los valores de
+// cada atributo, generadas con "Generar variantes" en la pantalla de Productos.
+
+function hasVariants(product) {
+  return (product?.attributes || []).length > 0;
+}
+
+// Nombre para mostrar de una variante puntual, armado a partir de sus attributeValues
+// en el mismo orden en que el producto definió sus atributos. Ej: "L / Rojo / Algodón".
+function variantLabel(product, variant) {
+  const attrs = product?.attributes || [];
+  if (!variant || attrs.length === 0) return '';
+  return attrs.map((a) => variant.attributeValues?.[a.name]).filter(Boolean).join(' / ');
+}
+
+// "Producto" o "Producto — variante", para historiales y selects.
+function fullLabel(product, variant) {
+  if (!product) return '—';
+  const vl = variantLabel(product, variant);
+  return vl ? `${product.name} — ${vl}` : product.name;
+}
+
+function sameAttributeValues(a, b, attrNames) {
+  return attrNames.every((n) => a[n] === b[n]);
+}
+
+// Producto cartesiano de las opciones de todos los atributos: [{Talle:'S',Color:'Rojo'}, ...]
+function attributeCombos(attributes) {
+  return (attributes || []).reduce(
+    (acc, attr) => acc.flatMap((combo) => (attr.options || []).map((opt) => ({ ...combo, [attr.name]: opt }))),
+    [{}]
+  );
+}
+
+// Genera las variantes de un producto a partir de sus atributos actuales. No pisa el
+// stock de las combinaciones que ya existían (mismos attributeValues) — solo agrega
+// las combinaciones nuevas, con stock en 0 para completar a mano.
+function generateVariants(product) {
+  const attrs = product.attributes || [];
+  if (attrs.length === 0) return [];
+  const attrNames = attrs.map((a) => a.name);
+  const existing = product.variants || [];
+  return attributeCombos(attrs).map((combo) => {
+    const found = existing.find((v) => sameAttributeValues(v.attributeValues || {}, combo, attrNames));
+    return found || { id: uid(), attributeValues: combo, initialStock: 0, lowStockThreshold: '', priceOverride: '' };
+  });
+}
+
+// Stock de una variante puntual (igual criterio que getProductStock/getProductStockDeposito
+// más abajo, pero filtrando también por variantId).
+function getVariantStock(product, variant, movements) {
+  const vm = movements.filter((m) => m.productId === product.id && m.variantId === variant.id);
+  const ingreso = vm.filter((m) => m.type === 'ingreso').reduce((s, m) => s + Number(m.quantity), 0);
+  const salida = vm.filter((m) => ['venta', 'fallada', 'regalada'].includes(m.type)).reduce((s, m) => s + Number(m.quantity), 0);
+  return Number(variant.initialStock) + ingreso - salida;
+}
+
+function getVariantStockDeposito(product, variant, movements) {
+  const vm = movements.filter((m) => m.productId === product.id && m.variantId === variant.id);
+  const ingreso = vm.filter((m) => m.type === 'ingreso').reduce((s, m) => s + Number(m.quantity), 0);
+  const entrega = vm.filter((m) => m.type === 'entrega').reduce((s, m) => s + Number(m.quantity), 0);
+  return Number(variant.initialStock) + ingreso - entrega;
 }
 
 function Card({ children, style, className = '', onClick }) {
@@ -379,7 +471,20 @@ export default function MerchTracker() {
   const totalInvertido = data.products.reduce((s, p) => s + Number(p.invested), 0);
   const totalStock = stats.reduce((s, p) => s + p.stockActual, 0);
   const totalStockDeposito = stats.reduce((s, p) => s + p.stockDeposito, 0);
-  const lowStock = stats.filter((p) => p.stockDeposito > 0 && p.stockDeposito < (Number(p.lowStockThreshold) || 20));
+  // Con variantes, la alerta se evalúa por variante puntual (no alcanza con que el total
+  // del producto esté bien si un color específico se quedó sin stock) — cada entrada del
+  // listado sabe a qué producto/variante corresponde, para "Pedir más" y el detalle en Productos.
+  const lowStock = stats.flatMap((p) => {
+    if (hasVariants(p)) {
+      return (p.variantStats || [])
+        .filter((v) => v.stockDeposito > 0 && v.stockDeposito < (Number(v.lowStockThreshold) || Number(p.lowStockThreshold) || 20))
+        .map((v) => ({ id: `${p.id}:${v.id}`, name: fullLabel(p, v), stockDeposito: v.stockDeposito, productId: p.id, variantId: v.id }));
+    }
+    if (p.stockDeposito > 0 && p.stockDeposito < (Number(p.lowStockThreshold) || 20)) {
+      return [{ id: p.id, name: p.name, stockDeposito: p.stockDeposito, productId: p.id, variantId: null }];
+    }
+    return [];
+  });
 
   // "Quién" combina a la gente del equipo con cuenta de Google (automático) con las
   // personas cargadas a mano (para casos sin cuenta, como ayuda puntual en un evento).
@@ -597,6 +702,7 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [expandedIds, setExpandedIds] = useState({});
   const dateFilterActive = !!(dateFrom || dateTo);
 
   // El filtro de fecha solo afecta a los números de actividad (ventas, recaudado y sus
@@ -612,7 +718,19 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
     const recaudado = pm.filter((m) => m.type === 'venta').reduce((s, m) => s + Number(m.amount), 0);
     const fallada = pm.filter((m) => m.type === 'fallada').reduce((s, m) => s + Number(m.quantity), 0);
     const regalada = pm.filter((m) => m.type === 'regalada').reduce((s, m) => s + Number(m.quantity), 0);
-    return { ...p, vendido, recaudado, fallada, regalada };
+    // Desglose por variante (respetando el mismo filtro de fecha); el stock siempre se
+    // muestra en tiempo real (viene de p.variantStats, ya calculado sin filtro de fecha).
+    const variantRows = hasVariants(p) ? (p.variantStats || []).map((v) => {
+      const vm = pm.filter((m) => m.variantId === v.id);
+      return {
+        ...v,
+        vendido: vm.filter((m) => m.type === 'venta').reduce((s, m) => s + Number(m.quantity), 0),
+        recaudado: vm.filter((m) => m.type === 'venta').reduce((s, m) => s + Number(m.amount), 0),
+        fallada: vm.filter((m) => m.type === 'fallada').reduce((s, m) => s + Number(m.quantity), 0),
+        regalada: vm.filter((m) => m.type === 'regalada').reduce((s, m) => s + Number(m.quantity), 0),
+      };
+    }) : null;
+    return { ...p, vendido, recaudado, fallada, regalada, variantRows };
   });
 
   const totalRecaudadoFiltered = dateFilterActive ? filteredStats.reduce((s, p) => s + p.recaudado, 0) : totalRecaudado;
@@ -663,46 +781,75 @@ function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido, totalS
         <table className="mt-table">
           <thead>
             <tr>
-              <th>Producto</th><th>Categoría</th><th>Stock</th><th>Stock depósito</th><th>Vendido</th><th>Recaudado</th><th>% Recuperado</th><th>Falladas</th><th>Regaladas</th>
+              <th></th><th>Producto</th><th>Categoría</th><th>Stock</th><th>Stock depósito</th><th>Vendido</th><th>Recaudado</th><th>% Recuperado</th><th>Falladas</th><th>Regaladas</th>
             </tr>
           </thead>
           <tbody>
             {filteredStats.map((p) => {
               const pct = Number(p.invested) > 0 ? (p.recaudado / Number(p.invested)) * 100 : null;
+              const isExpanded = !!expandedIds[p.id];
               return (
-                <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {p.mockupUrl ? (
-                        <img src={p.mockupUrl} alt={p.name} style={{ width: 26, height: 26, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #E1E3E8', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                <>
+                  <tr key={p.id}>
+                    <td style={{ width: 20 }}>
+                      {hasVariants(p) && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedIds((e) => ({ ...e, [p.id]: !e[p.id] }))}
+                          className="icon-btn"
+                          style={{ padding: 2 }}
+                        >
+                          <ChevronDown size={13} style={{ transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                        </button>
+                      )}
+                    </td>
+                    <td style={{ fontWeight: 600 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {p.mockupUrl ? (
+                          <img src={p.mockupUrl} alt={p.name} style={{ width: 26, height: 26, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #E1E3E8', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                        ) : (
+                          <div style={{ width: 26, height: 26, borderRadius: 5, border: '1.4px solid #E1E3E8', background: '#F7F7F8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <ImageOff size={12} color="#C7CBD3" />
+                          </div>
+                        )}
+                        <span>{p.name}{hasVariants(p) && <span className="mt-mono muted" style={{ fontSize: 10.5, marginLeft: 6 }}>({p.variantStats.length} variantes)</span>}</span>
+                      </div>
+                    </td>
+                    <td className="mt-mono muted">{p.category}</td>
+                    <td className="mt-mono">{p.stockActual}</td>
+                    <td className="mt-mono" style={{ color: p.stockDeposito < (Number(p.lowStockThreshold) || 20) ? '#D8493F' : 'inherit' }}>{p.stockDeposito}</td>
+                    <td className="mt-mono">{p.vendido}</td>
+                    <td className="mt-mono">{euro(p.recaudado)}</td>
+                    <td className="mt-mono">
+                      {pct === null ? (
+                        <span className="muted">—</span>
                       ) : (
-                        <div style={{ width: 26, height: 26, borderRadius: 5, border: '1.4px solid #E1E3E8', background: '#F7F7F8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <ImageOff size={12} color="#C7CBD3" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ minWidth: 34, fontWeight: pct >= 100 ? 700 : 400, color: pct >= 100 ? '#3D7A5C' : 'inherit' }}>{pct.toFixed(0)}%</span>
+                          <div style={{ width: 50, height: 5, borderRadius: 3, background: '#EDEEF1', overflow: 'hidden', flexShrink: 0 }}>
+                            <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: pct >= 100 ? '#3D7A5C' : '#B8791A' }} />
+                          </div>
                         </div>
                       )}
-                      <span>{p.name}</span>
-                    </div>
-                  </td>
-                  <td className="mt-mono muted">{p.category}</td>
-                  <td className="mt-mono">{p.stockActual}</td>
-                  <td className="mt-mono" style={{ color: p.stockDeposito < (Number(p.lowStockThreshold) || 20) ? '#D8493F' : 'inherit' }}>{p.stockDeposito}</td>
-                  <td className="mt-mono">{p.vendido}</td>
-                  <td className="mt-mono">{euro(p.recaudado)}</td>
-                  <td className="mt-mono">
-                    {pct === null ? (
-                      <span className="muted">—</span>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ minWidth: 34, fontWeight: pct >= 100 ? 700 : 400, color: pct >= 100 ? '#3D7A5C' : 'inherit' }}>{pct.toFixed(0)}%</span>
-                        <div style={{ width: 50, height: 5, borderRadius: 3, background: '#EDEEF1', overflow: 'hidden', flexShrink: 0 }}>
-                          <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: pct >= 100 ? '#3D7A5C' : '#B8791A' }} />
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="mt-mono muted">{p.fallada}</td>
-                  <td className="mt-mono muted">{p.regalada}</td>
-                </tr>
+                    </td>
+                    <td className="mt-mono muted">{p.fallada}</td>
+                    <td className="mt-mono muted">{p.regalada}</td>
+                  </tr>
+                  {isExpanded && (p.variantRows || []).map((v) => (
+                    <tr key={v.id} style={{ background: '#F7F7F8' }}>
+                      <td></td>
+                      <td className="mt-mono muted" style={{ paddingLeft: 20 }}>↳ {v.label}</td>
+                      <td></td>
+                      <td className="mt-mono">{v.stockActual}</td>
+                      <td className="mt-mono" style={{ color: v.stockDeposito < (Number(v.lowStockThreshold) || Number(p.lowStockThreshold) || 20) ? '#D8493F' : 'inherit' }}>{v.stockDeposito}</td>
+                      <td className="mt-mono">{v.vendido}</td>
+                      <td className="mt-mono">{euro(v.recaudado)}</td>
+                      <td className="mt-mono muted">—</td>
+                      <td className="mt-mono muted">{v.fallada}</td>
+                      <td className="mt-mono muted">{v.regalada}</td>
+                    </tr>
+                  ))}
+                </>
               );
             })}
           </tbody>
@@ -806,7 +953,7 @@ function exportMovementsCsv(movements, products, locations, people) {
   const header = ['Fecha', 'Producto', 'Ubicación', 'Quién', 'Tipo', 'Cantidad', 'Monto', 'Nota'];
   const rows = movements.map((m) => [
     m.date,
-    products.find((p) => p.id === m.productId)?.name || '',
+    (() => { const prod = products.find((p) => p.id === m.productId); const variant = prod?.variants?.find((v) => v.id === m.variantId); return prod ? fullLabel(prod, variant) : ''; })(),
     locations.find((l) => l.id === m.locationId)?.name || '',
     people.find((u) => u.id === m.personId)?.name || '',
     TYPE_META[m.type]?.label || m.type,
@@ -825,7 +972,7 @@ function exportMovementsCsv(movements, products, locations, people) {
 }
 
 const emptyMovForm = (products, locations, people) => ({
-  productId: products[0]?.id || '', locationId: locations[0]?.id || '', personId: people[0]?.id || '',
+  productId: products[0]?.id || '', variantId: '', locationId: locations[0]?.id || '', personId: people[0]?.id || '',
   type: 'venta', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '',
 });
 
@@ -836,20 +983,25 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
   const [confirmRef, triggerConfirm] = useConfirmMorph();
   const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
 
+  const selectedProduct = data.products.find((p) => p.id === form.productId);
+  const needsVariant = hasVariants(selectedProduct);
+  const selectedVariant = needsVariant ? (selectedProduct.variants || []).find((v) => v.id === form.variantId) : null;
+
   const submit = async (e) => {
     e.preventDefault();
     if (!form.productId || !form.quantity) return;
+    if (needsVariant && !form.variantId) return; // hace falta elegir variante
     const qty = Number(form.quantity);
     if (['venta', 'fallada', 'regalada'].includes(form.type)) {
       const product = data.products.find((p) => p.id === form.productId);
       if (product) {
-        let currentStock = getProductStock(product, data.movements);
+        let currentStock = needsVariant ? getVariantStock(product, selectedVariant, data.movements) : getProductStock(product, data.movements);
         if (editingId) {
           const prev = data.movements.find((m) => m.id === editingId);
-          if (prev && prev.productId === form.productId && ['venta', 'fallada', 'regalada'].includes(prev.type)) currentStock += Number(prev.quantity);
+          if (prev && prev.productId === form.productId && (prev.variantId || null) === (form.variantId || null) && ['venta', 'fallada', 'regalada'].includes(prev.type)) currentStock += Number(prev.quantity);
         }
         if (qty > currentStock) {
-          const ok = await askConfirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: esto va a dejar el stock de "${fullLabel(product, selectedVariant)}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
@@ -857,18 +1009,18 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
     if (form.type === 'entrega') {
       const product = data.products.find((p) => p.id === form.productId);
       if (product) {
-        let currentDeposito = getProductStockDeposito(product, data.movements);
+        let currentDeposito = needsVariant ? getVariantStockDeposito(product, selectedVariant, data.movements) : getProductStockDeposito(product, data.movements);
         if (editingId) {
           const prev = data.movements.find((m) => m.id === editingId);
-          if (prev && prev.productId === form.productId && prev.type === 'entrega') currentDeposito += Number(prev.quantity);
+          if (prev && prev.productId === form.productId && (prev.variantId || null) === (form.variantId || null) && prev.type === 'entrega') currentDeposito += Number(prev.quantity);
         }
         if (qty > currentDeposito) {
-          const ok = await askConfirm(`Ojo: en el depósito quedan ${currentDeposito} de "${product.name}" y estás entregando ${qty}. ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: en el depósito quedan ${currentDeposito} de "${fullLabel(product, selectedVariant)}" y estás entregando ${qty}. ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
     }
-    const payload = { ...form, quantity: qty, amount: Number(form.amount) || 0 };
+    const payload = { ...form, variantId: needsVariant ? form.variantId : null, quantity: qty, amount: Number(form.amount) || 0 };
     if (editingId) {
       onUpdate(editingId, payload);
       setEditingId(null);
@@ -876,12 +1028,12 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
       onAdd(payload);
     }
     triggerConfirm();
-    setForm((f) => ({ ...emptyMovForm(data.products, data.locations, people), productId: f.productId, locationId: f.locationId, personId: f.personId, type: f.type }));
+    setForm((f) => ({ ...emptyMovForm(data.products, data.locations, people), productId: f.productId, variantId: '', locationId: f.locationId, personId: f.personId, type: f.type }));
   };
 
   const startEdit = (m) => {
     setEditingId(m.id);
-    setForm({ productId: m.productId, locationId: m.locationId, personId: m.personId || '', type: m.type, quantity: String(m.quantity), amount: m.amount ? String(m.amount) : '', date: m.date, note: m.note || '' });
+    setForm({ productId: m.productId, variantId: m.variantId || '', locationId: m.locationId, personId: m.personId || '', type: m.type, quantity: String(m.quantity), amount: m.amount ? String(m.amount) : '', date: m.date, note: m.note || '' });
   };
   const cancelEdit = () => {
     setEditingId(null);
@@ -935,8 +1087,21 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
         )}
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="Producto">
-            <Select value={form.productId} onChange={(v) => setForm({ ...form, productId: v })} options={data.products.map((p) => ({ value: p.id, label: p.name }))} style={{ width: 160 }} />
+            <Select value={form.productId} onChange={(v) => setForm({ ...form, productId: v, variantId: '' })} options={data.products.map((p) => ({ value: p.id, label: p.name }))} style={{ width: 160 }} />
           </Field>
+          {needsVariant && (
+            <Field label="Variante">
+              <Select
+                value={form.variantId}
+                onChange={(v) => setForm({ ...form, variantId: v })}
+                options={[
+                  { value: '', label: 'Elegir…' },
+                  ...selectedProduct.variants.map((v) => ({ value: v.id, label: `${variantLabel(selectedProduct, v)} (stock ${getVariantStock(selectedProduct, v, data.movements)})` })),
+                ]}
+                style={{ width: 200 }}
+              />
+            </Field>
+          )}
           <Field label="Ubicación">
             <Select value={form.locationId} onChange={(v) => setForm({ ...form, locationId: v })} options={data.locations.map((l) => ({ value: l.id, label: l.name }))} style={{ width: 160 }} />
           </Field>
@@ -1013,12 +1178,13 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
             {filtered.length === 0 && <tr><td colSpan={9} className="muted" style={{ padding: 16 }}>{filtersActive ? 'Ningún movimiento coincide con los filtros.' : 'Todavía no hay movimientos cargados.'}</td></tr>}
             {filtered.map((m) => {
               const prod = data.products.find((p) => p.id === m.productId);
+              const variant = prod?.variants?.find((v) => v.id === m.variantId);
               const loc = data.locations.find((l) => l.id === m.locationId);
               const person = people.find((u) => u.id === m.personId);
               return (
                 <tr key={m.id} style={{ background: editingId === m.id ? '#F7F7F8' : 'transparent' }}>
                   <td className="mt-mono muted">{m.date}</td>
-                  <td style={{ fontWeight: 600 }}>{prod?.name || '—'}</td>
+                  <td style={{ fontWeight: 600 }}>{fullLabel(prod, variant)}</td>
                   <td className="mt-mono">{loc?.name || '—'}</td>
                   <td className="mt-mono">{person?.name || '—'}</td>
                   <td><span className="mt-mono" style={{ color: TYPE_META[m.type]?.color }}>{TYPE_META[m.type]?.label}</span></td>
@@ -1063,16 +1229,20 @@ function VentaRapida({ stats, locations, people, movements, onAdd, onUndo, onNav
   }, [flash]);
 
   const today = new Date().toISOString().slice(0, 10);
-  const setQty = (productId, qty) => setQtyByProduct((q) => ({ ...q, [productId]: Math.max(1, qty) }));
+  const setQty = (key, qty) => setQtyByProduct((q) => ({ ...q, [key]: Math.max(1, qty) }));
 
-  const registerSale = (product) => {
+  // key: para un producto simple es el id del producto; para una variante, el id de la
+  // variante puntual (ya es único por sí solo, generado con uid()).
+  const registerSale = (product, variant) => {
     if (!locationId) { setFlash({ text: 'Elegí un punto de venta primero.' }); return; }
-    const qty = qtyByProduct[product.id] || 1;
-    const amount = qty * Number(product.price || 0);
+    const key = variant ? variant.id : product.id;
+    const qty = qtyByProduct[key] || 1;
+    const price = Number((variant?.priceOverride !== '' && variant?.priceOverride != null ? variant.priceOverride : product.price) || 0);
+    const amount = qty * price;
     const movementId = uid();
-    onAdd({ id: movementId, productId: product.id, locationId, personId, type: 'venta', quantity: qty, amount, date: today, note: '' });
-    setQtyByProduct((q) => ({ ...q, [product.id]: 1 }));
-    setFlash({ text: `Vendido: ${qty} × ${product.name} (${euro(amount)})`, movementId });
+    onAdd({ id: movementId, productId: product.id, variantId: variant ? variant.id : null, locationId, personId, type: 'venta', quantity: qty, amount, date: today, note: '' });
+    setQtyByProduct((q) => ({ ...q, [key]: 1 }));
+    setFlash({ text: `Vendido: ${qty} × ${fullLabel(product, variant)} (${euro(amount)})`, movementId });
   };
 
   return (
@@ -1125,34 +1295,69 @@ function VentaRapida({ stats, locations, people, movements, onAdd, onUndo, onNav
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {stats.map((p) => {
-            const qty = qtyByProduct[p.id] || 1;
-            const sinStock = p.stockActual <= 0;
-            return (
-              <Card key={p.id} style={{ padding: 14, flex: '1 1 200px', opacity: sinStock ? 0.5 : 1 }}>
-                <div style={{ fontWeight: 700 }}>{p.name}</div>
-                <div className="mt-mono muted" style={{ fontSize: 11, marginBottom: 10 }}>{euro(p.price)} · stock {p.stockActual}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <button type="button" disabled={sinStock} onClick={() => setQty(p.id, qty - 1)} className="icon-btn"><Minus size={13} /></button>
-                  <span className="mt-mono" style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{qty}</span>
-                  <button type="button" disabled={sinStock} onClick={() => setQty(p.id, qty + 1)} className="icon-btn"><Plus size={13} /></button>
+            if (hasVariants(p)) {
+              if ((p.variantStats || []).length === 0) return null;
+              return (
+                <div key={p.id}>
+                  <div className="mt-mono muted" style={{ fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>{p.name}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {p.variantStats.map((v) => (
+                      <VentaRapidaCard
+                        key={v.id}
+                        title={v.label}
+                        price={v.priceOverride !== '' && v.priceOverride != null ? v.priceOverride : p.price}
+                        stock={v.stockActual}
+                        qty={qtyByProduct[v.id] || 1}
+                        onQty={(q) => setQty(v.id, q)}
+                        onSell={() => registerSale(p, v)}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  disabled={sinStock}
-                  onClick={() => registerSale(p)}
-                  className="mt-btn"
-                  style={{ width: '100%', justifyContent: 'center', opacity: sinStock ? 0.6 : 1, cursor: sinStock ? 'not-allowed' : 'pointer' }}
-                >
-                  {sinStock ? 'Sin stock' : <><Zap size={13} /> Vender{qty > 1 ? ` ×${qty}` : ''}</>}
-                </button>
-              </Card>
+              );
+            }
+            return (
+              <div key={p.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                <VentaRapidaCard
+                  title={p.name}
+                  price={p.price}
+                  stock={p.stockActual}
+                  qty={qtyByProduct[p.id] || 1}
+                  onQty={(q) => setQty(p.id, q)}
+                  onSell={() => registerSale(p)}
+                />
+              </div>
             );
           })}
         </div>
       )}
     </div>
+  );
+}
+
+function VentaRapidaCard({ title, price, stock, qty, onQty, onSell }) {
+  const sinStock = stock <= 0;
+  return (
+    <Card style={{ padding: 14, flex: '1 1 200px', opacity: sinStock ? 0.5 : 1 }}>
+      <div style={{ fontWeight: 700 }}>{title}</div>
+      <div className="mt-mono muted" style={{ fontSize: 11, marginBottom: 10 }}>{euro(price)} · stock {stock}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <button type="button" disabled={sinStock} onClick={() => onQty(qty - 1)} className="icon-btn"><Minus size={13} /></button>
+        <span className="mt-mono" style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{qty}</span>
+        <button type="button" disabled={sinStock} onClick={() => onQty(qty + 1)} className="icon-btn"><Plus size={13} /></button>
+      </div>
+      <button
+        type="button"
+        disabled={sinStock}
+        onClick={onSell}
+        className="mt-btn"
+        style={{ width: '100%', justifyContent: 'center', opacity: sinStock ? 0.6 : 1, cursor: sinStock ? 'not-allowed' : 'pointer' }}
+      >
+        {sinStock ? 'Sin stock' : <><Zap size={13} /> Vender{qty > 1 ? ` ×${qty}` : ''}</>}
+      </button>
+    </Card>
   );
 }
 
@@ -1379,7 +1584,7 @@ function ImageUploadField({ value, onChange, label = 'Mockup / imagen', accept =
   );
 }
 
-const emptyProductForm = { name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '' };
+const emptyProductForm = { name: '', category: 'Merch', price: '', invested: '', initialStock: '', lowStockThreshold: '20', providerId: '', weight: '', unitsPerPackage: '', mockupUrl: '', attributes: [], variants: [] };
 
 const PRODUCT_SORT_OPTIONS = [
   { value: 'name', label: 'Nombre (A-Z)' },
@@ -1403,6 +1608,99 @@ function sortProductStats(list, sortBy) {
   }
 }
 
+// Editor de atributos dentro del formulario de Productos. Un atributo es una dimensión
+// libre (nombre + lista de opciones, ej. "Color": Rojo, Celeste...) — nada de esto está
+// harcodeado: el usuario define el nombre y las opciones que necesite, para el producto
+// que sea. Sin atributos, el producto queda simple (como hoy). Con uno o más, "Generar
+// variantes" (en VariantsEditor) arma las combinaciones.
+function AttributesEditor({ attributes, onAdd, onNameChange, onRemove, onAddOption, onRemoveOption }) {
+  const [optionDraft, setOptionDraft] = useState({});
+
+  const submitOption = (idx) => {
+    const val = (optionDraft[idx] || '').trim();
+    if (!val) return;
+    onAddOption(idx, val);
+    setOptionDraft((d) => ({ ...d, [idx]: '' }));
+  };
+
+  return (
+    <div style={{ flexBasis: '100%', background: '#F7F7F8', border: '1.5px dashed #E1E3E8', borderRadius: 8, padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: attributes.length ? 10 : 0 }}>
+        <span className="mt-mono muted" style={{ fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase' }}>Atributos (opcional — para productos con variantes)</span>
+        <button type="button" onClick={onAdd} className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'transparent', border: '1.4px solid #3D7A5C', color: '#3D7A5C', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+          <Plus size={12} /> Agregar atributo
+        </button>
+      </div>
+      {attributes.map((attr, idx) => (
+        <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 8, padding: 8, background: '#FFFFFF', border: '1px solid #E1E3E8', borderRadius: 6 }}>
+          <input
+            className="mt-input"
+            style={{ width: 130 }}
+            placeholder='Ej. "Color"'
+            value={attr.name}
+            onChange={(e) => onNameChange(idx, e.target.value)}
+          />
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', flex: 1, minWidth: 180 }}>
+            {attr.options.map((opt) => (
+              <span key={opt} className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#E8F2EC', color: '#3D7A5C', borderRadius: 20, padding: '3px 8px', fontSize: 11.5 }}>
+                {opt}
+                <button type="button" onClick={() => onRemoveOption(idx, opt)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}><X size={10} /></button>
+              </span>
+            ))}
+            <input
+              className="mt-input"
+              style={{ width: 110 }}
+              placeholder="+ opción"
+              value={optionDraft[idx] || ''}
+              onChange={(e) => setOptionDraft((d) => ({ ...d, [idx]: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitOption(idx); } }}
+              onBlur={() => submitOption(idx)}
+            />
+          </div>
+          <button type="button" onClick={() => onRemove(idx)} className="icon-btn" title="Quitar atributo"><Trash2 size={13} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Tabla de variantes (combinaciones de atributos) dentro del formulario de Productos.
+// "Generar variantes" arma el producto cartesiano de las opciones elegidas sin pisar el
+// stock de las combinaciones que ya existían — solo agrega las que faltan.
+function VariantsEditor({ attributes, variants, onGenerate, onFieldChange, onRemove }) {
+  const pendingCombos = attributeCombos(attributes.filter((a) => a.name && a.options.length)).length;
+  return (
+    <div style={{ flexBasis: '100%', background: '#F7F7F8', border: '1.5px dashed #E1E3E8', borderRadius: 8, padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+        <span className="mt-mono muted" style={{ fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase' }}>Variantes ({variants.length})</span>
+        <button type="button" onClick={onGenerate} className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#3D7A5C', color: '#fff', border: 'none', borderRadius: 5, padding: '5px 12px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+          <Tags size={12} /> Generar variantes ({pendingCombos} combinaciones)
+        </button>
+      </div>
+      {variants.length === 0 ? (
+        <p className="muted" style={{ fontSize: 12, margin: 0 }}>Todavía no generaste variantes para las opciones cargadas arriba.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="mt-table">
+            <thead><tr><th>Variante</th><th>Stock inicial</th><th>Umbral (opcional)</th><th>Precio (opcional)</th><th></th></tr></thead>
+            <tbody>
+              {variants.map((v) => (
+                <tr key={v.id}>
+                  <td style={{ fontWeight: 600 }}>{attributes.map((a) => v.attributeValues?.[a.name]).filter(Boolean).join(' / ')}</td>
+                  <td><input className="mt-input" type="number" style={{ width: 80 }} value={v.initialStock} onChange={(e) => onFieldChange(v.id, 'initialStock', Number(e.target.value) || 0)} /></td>
+                  <td><input className="mt-input" type="number" style={{ width: 80 }} placeholder="default" value={v.lowStockThreshold ?? ''} onChange={(e) => onFieldChange(v.id, 'lowStockThreshold', e.target.value)} /></td>
+                  <td><input className="mt-input" type="number" step="0.01" style={{ width: 90 }} placeholder="= precio prod." value={v.priceOverride ?? ''} onChange={(e) => onFieldChange(v.id, 'priceOverride', e.target.value)} /></td>
+                  <td><button type="button" onClick={() => onRemove(v.id)} className="icon-btn"><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
   const [form, setForm] = useState(emptyProductForm);
   const [editingId, setEditingId] = useState(null);
@@ -1410,13 +1708,18 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
 
+  const formHasVariants = (form.attributes || []).some((a) => a.name && (a.options || []).length > 0);
+
   const submit = (e) => {
     e.preventDefault();
     if (!form.name) return;
+    const cleanAttributes = (form.attributes || []).filter((a) => a.name && (a.options || []).length > 0);
     const payload = {
       name: form.name, category: form.category || 'Merch', price: Number(form.price) || 0, invested: Number(form.invested) || 0,
       initialStock: Number(form.initialStock) || 0, lowStockThreshold: Number(form.lowStockThreshold) || 20,
       providerId: form.providerId, weight: form.weight, unitsPerPackage: form.unitsPerPackage, mockupUrl: form.mockupUrl,
+      attributes: cleanAttributes,
+      variants: cleanAttributes.length > 0 ? (form.variants || []) : [],
     };
     if (editingId) {
       onUpdate(editingId, payload);
@@ -1434,6 +1737,7 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
       name: p.name, category: p.category || 'Merch', price: p.price ? String(p.price) : '', invested: p.invested ? String(p.invested) : '',
       initialStock: p.initialStock ? String(p.initialStock) : '', lowStockThreshold: p.lowStockThreshold ? String(p.lowStockThreshold) : '20',
       providerId: p.providerId || '', weight: p.weight || '', unitsPerPackage: p.unitsPerPackage ? String(p.unitsPerPackage) : '', mockupUrl: p.mockupUrl || '',
+      attributes: p.attributes || [], variants: p.variants || [],
     });
   };
   const cancelEdit = () => {
@@ -1441,7 +1745,24 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
     setForm(emptyProductForm);
   };
 
+  // --- Edición de atributos (dentro del formulario, en borrador hasta que se guarde el producto) ---
+  const addAttribute = () => setForm((f) => ({ ...f, attributes: [...(f.attributes || []), { name: '', options: [] }] }));
+  const updateAttributeName = (idx, name) => setForm((f) => ({ ...f, attributes: f.attributes.map((a, i) => (i === idx ? { ...a, name } : a)) }));
+  const removeAttribute = (idx) => setForm((f) => ({ ...f, attributes: f.attributes.filter((_, i) => i !== idx) }));
+  const addAttributeOption = (idx, option) => setForm((f) => ({
+    ...f,
+    attributes: f.attributes.map((a, i) => (i === idx && option && !a.options.includes(option) ? { ...a, options: [...a.options, option] } : a)),
+  }));
+  const removeAttributeOption = (idx, option) => setForm((f) => ({
+    ...f,
+    attributes: f.attributes.map((a, i) => (i === idx ? { ...a, options: a.options.filter((o) => o !== option) } : a)),
+  }));
+  const runGenerateVariants = () => setForm((f) => ({ ...f, variants: generateVariants({ attributes: f.attributes, variants: f.variants }) }));
+  const updateVariantField = (variantId, field, value) => setForm((f) => ({ ...f, variants: f.variants.map((v) => (v.id === variantId ? { ...v, [field]: value } : v)) }));
+  const removeVariantRow = (variantId) => setForm((f) => ({ ...f, variants: f.variants.filter((v) => v.id !== variantId) }));
+
   const visibleStats = sortProductStats(stats.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase())), sortBy);
+  const [expanded, setExpanded] = useState({});
 
   return (
     <div>
@@ -1461,8 +1782,10 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
           </Field>
           <Field label="Precio unit. (€)"><input className="mt-input" type="number" step="0.01" style={{ width: 100 }} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
           <Field label="Invertido (€)"><input className="mt-input" type="number" step="0.01" style={{ width: 100 }} value={form.invested} onChange={(e) => setForm({ ...form, invested: e.target.value })} /></Field>
-          <Field label="Stock inicial"><input className="mt-input" type="number" style={{ width: 100 }} value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} /></Field>
-          <Field label="Alertar si baja de">
+          {!formHasVariants && (
+            <Field label="Stock inicial"><input className="mt-input" type="number" style={{ width: 100 }} value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} /></Field>
+          )}
+          <Field label={formHasVariants ? 'Alertar si baja de (default)' : 'Alertar si baja de'}>
             <input className="mt-input" type="number" style={{ width: 90 }} value={form.lowStockThreshold} onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })} />
           </Field>
           <Field label="Proveedor">
@@ -1471,6 +1794,31 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
           <Field label="Peso / medida"><input className="mt-input" style={{ width: 100 }} placeholder="ej. 250g" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></Field>
           <Field label="Uds. por paquete"><input className="mt-input" type="number" style={{ width: 100 }} value={form.unitsPerPackage} onChange={(e) => setForm({ ...form, unitsPerPackage: e.target.value })} /></Field>
           <ImageUploadField value={form.mockupUrl} onChange={(url) => setForm({ ...form, mockupUrl: url })} />
+
+          <div style={{ flexBasis: '100%' }} />
+          <AttributesEditor
+            attributes={form.attributes || []}
+            onAdd={addAttribute}
+            onNameChange={updateAttributeName}
+            onRemove={removeAttribute}
+            onAddOption={addAttributeOption}
+            onRemoveOption={removeAttributeOption}
+          />
+
+          {formHasVariants && (
+            <>
+              <div style={{ flexBasis: '100%' }} />
+              <VariantsEditor
+                attributes={form.attributes}
+                variants={form.variants || []}
+                onGenerate={runGenerateVariants}
+                onFieldChange={updateVariantField}
+                onRemove={removeVariantRow}
+              />
+            </>
+          )}
+
+          <div style={{ flexBasis: '100%' }} />
           <button type="submit" className="mt-btn" ref={confirmRef}>
             <ConfirmContent>
               {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar</>}
@@ -1501,7 +1849,8 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
         {visibleStats.map((p) => {
           const threshold = Number(p.lowStockThreshold) || 20;
-          const isLow = p.stockDeposito > 0 && p.stockDeposito < threshold;
+          const variantAlerts = hasVariants(p) ? (p.variantStats || []).filter((v) => v.stockDeposito > 0 && v.stockDeposito < (Number(v.lowStockThreshold) || threshold)) : [];
+          const isLow = hasVariants(p) ? variantAlerts.length > 0 : (p.stockDeposito > 0 && p.stockDeposito < threshold);
           const movido = Math.max(0, Number(p.initialStock) - p.stockActual);
           const revenueEstimado = movido * Number(p.price || 0);
           const provider = providers.find((pr) => pr.id === p.providerId);
@@ -1517,7 +1866,14 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
                       {p.name}
                       {isLow && <AlertTriangle size={13} color="#D8493F" />}
                     </div>
-                    <div className="mt-mono muted" style={{ fontSize: 11 }}>{p.category}</div>
+                    <div className="mt-mono muted" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {p.category}
+                      {hasVariants(p) && (
+                        <span className="mt-mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: '#EAF1FB', color: '#3E6B8A', borderRadius: 20, padding: '2px 8px', fontSize: 10.5, fontWeight: 700 }}>
+                          <Tags size={10} /> {p.variantStats.length} variante{p.variantStats.length === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -1527,16 +1883,42 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
               </div>
               <div className="perforation" style={{ margin: '10px 0' }} />
               <div className="mt-mono" style={{ fontSize: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-                <span className="muted">Precio</span><span>{euro(p.price)}</span>
+                <span className="muted">Precio</span><span>{hasVariants(p) ? 'según variante' : euro(p.price)}</span>
                 <span className="muted">Invertido</span><span>{euro(p.invested)}</span>
-                <span className="muted">Stock inicial</span><span>{p.initialStock}</span>
-                <span className="muted">Stock actual</span><span>{p.stockActual}</span>
-                <span className="muted">Stock en depósito</span><span style={{ color: isLow ? '#D8493F' : 'inherit', fontWeight: isLow ? 700 : 400 }}>{p.stockDeposito}</span>
-                <span className="muted">Umbral alerta</span><span>{threshold}</span>
+                {!hasVariants(p) && (<><span className="muted">Stock inicial</span><span>{p.initialStock}</span></>)}
+                <span className="muted">Stock actual{hasVariants(p) ? ' (total)' : ''}</span><span>{p.stockActual}</span>
+                <span className="muted">Stock en depósito{hasVariants(p) ? ' (total)' : ''}</span><span style={{ color: isLow ? '#D8493F' : 'inherit', fontWeight: isLow ? 700 : 400 }}>{p.stockDeposito}</span>
+                <span className="muted">Umbral alerta{hasVariants(p) ? ' (default)' : ''}</span><span>{threshold}</span>
                 {p.weight && (<><span className="muted">Peso</span><span>{p.weight}</span></>)}
                 {p.unitsPerPackage && (<><span className="muted">Uds/paquete</span><span>{p.unitsPerPackage}</span></>)}
                 <span className="muted">Proveedor</span><span>{provider?.name || '—'}</span>
               </div>
+              {hasVariants(p) && (
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((e) => ({ ...e, [p.id]: !e[p.id] }))}
+                    className="mt-mono"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', background: '#EAF1FB', border: '1.4px solid #B9D3E8', borderRadius: 6, cursor: 'pointer', padding: '6px 0', fontSize: 11.5, fontWeight: 700, color: '#3E6B8A' }}
+                  >
+                    <ChevronDown size={13} style={{ transform: expanded[p.id] ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                    Ver desglose por variante
+                  </button>
+                  {expanded[p.id] && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                      {p.variantStats.map((v) => {
+                        const vLow = v.stockDeposito > 0 && v.stockDeposito < (Number(v.lowStockThreshold) || threshold);
+                        return (
+                          <div key={v.id} className="mt-mono" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 6px', background: vLow ? '#FBEAE9' : '#F7F7F8', borderRadius: 4 }}>
+                            <span>{v.label}{vLow && <AlertTriangle size={10} color="#D8493F" style={{ marginLeft: 4, verticalAlign: -1 }} />}</span>
+                            <span style={{ color: vLow ? '#D8493F' : 'inherit' }}>{v.stockActual} (dep. {v.stockDeposito})</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{ marginTop: 'auto' }}>
                 <div className="perforation" style={{ margin: '10px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -1545,7 +1927,7 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
                 </div>
                 <div className="mt-mono muted" style={{ fontSize: 10, marginTop: 2 }}>({movido} uds movidas × {euro(p.price)})</div>
               </div>
-              {isLow && <div style={{ marginTop: 10 }}><PedirMasButton product={p} provider={provider} /></div>}
+              {isLow && <div style={{ marginTop: 10 }}><PedirMasButton product={p} provider={provider} lowVariants={variantAlerts} /></div>}
             </Card>
           );
         })}
@@ -1554,7 +1936,7 @@ function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
   );
 }
 
-function PedirMasButton({ product, provider }) {
+function PedirMasButton({ product, provider, lowVariants }) {
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState('');
 
@@ -1582,7 +1964,7 @@ function PedirMasButton({ product, provider }) {
           <a
             className="mt-btn"
             style={{ textDecoration: 'none', opacity: qty ? 1 : 0.5, pointerEvents: qty ? 'auto' : 'none' }}
-            href={buildOrderMailto(product, provider, qty)}
+            href={buildOrderMailto(product, provider, qty, lowVariants)}
             onClick={() => setTimeout(() => setOpen(false), 300)}
           >
             <Mail size={13} /> Abrir mail
@@ -1735,21 +2117,26 @@ function Ubicaciones({ locations, products, movements, people, onAdd, onUpdate, 
 
 function LocationDetail({ location, products, movements, people, onClose, onAddMovement, onUpdateMovement, onRemoveMovement }) {
   const lm = movements.filter((m) => m.locationId === location.id);
-  const [quick, setQuick] = useState({ productId: products[0]?.id || '', personId: people[0]?.id || '', type: 'entrega', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10) });
+  const [quick, setQuick] = useState({ productId: products[0]?.id || '', variantId: '', personId: people[0]?.id || '', type: 'entrega', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10) });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [confirmRef, triggerConfirm] = useConfirmMorph();
   const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
 
+  const quickProduct = products.find((p) => p.id === quick.productId);
+  const quickNeedsVariant = hasVariants(quickProduct);
+  const quickVariant = quickNeedsVariant ? (quickProduct.variants || []).find((v) => v.id === quick.variantId) : null;
+
   const submitQuick = async (e) => {
     e.preventDefault();
     if (!quick.productId || !quick.quantity) return;
+    if (quickNeedsVariant && !quick.variantId) return;
     const qty = Number(quick.quantity);
     if (['venta', 'fallada', 'regalada'].includes(quick.type)) {
       const product = products.find((p) => p.id === quick.productId);
       if (product) {
-        const currentStock = getProductStock(product, movements);
+        const currentStock = quickNeedsVariant ? getVariantStock(product, quickVariant, movements) : getProductStock(product, movements);
         if (qty > currentStock) {
-          const ok = await askConfirm(`Ojo: esto va a dejar el stock de "${product.name}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: esto va a dejar el stock de "${fullLabel(product, quickVariant)}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
@@ -1757,14 +2144,14 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
     if (quick.type === 'entrega') {
       const product = products.find((p) => p.id === quick.productId);
       if (product) {
-        const currentDeposito = getProductStockDeposito(product, movements);
+        const currentDeposito = quickNeedsVariant ? getVariantStockDeposito(product, quickVariant, movements) : getProductStockDeposito(product, movements);
         if (qty > currentDeposito) {
-          const ok = await askConfirm(`Ojo: en el depósito quedan ${currentDeposito} de "${product.name}" y estás entregando ${qty}. ¿Confirmás igual?`);
+          const ok = await askConfirm(`Ojo: en el depósito quedan ${currentDeposito} de "${fullLabel(product, quickVariant)}" y estás entregando ${qty}. ¿Confirmás igual?`);
           if (!ok) return;
         }
       }
     }
-    onAddMovement({ productId: quick.productId, locationId: location.id, personId: quick.personId, type: quick.type, quantity: qty, amount: Number(quick.amount) || 0, date: quick.date, note: '' });
+    onAddMovement({ productId: quick.productId, variantId: quickNeedsVariant ? quick.variantId : null, locationId: location.id, personId: quick.personId, type: quick.type, quantity: qty, amount: Number(quick.amount) || 0, date: quick.date, note: '' });
     triggerConfirm();
     setQuick((f) => ({ ...f, quantity: '', amount: '' }));
   };
@@ -1827,8 +2214,21 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
       <div className="mt-mono" style={{ fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', color: '#6B7280', marginBottom: 8 }}>Agregar producto a {location.name}</div>
       <form onSubmit={submitQuick} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 18, padding: 12, background: '#F7F7F8', borderRadius: 6, border: '1.5px dashed #E1E3E8' }}>
         <Field label="Producto">
-          <Select value={quick.productId} onChange={(v) => setQuick({ ...quick, productId: v })} options={products.map((p) => ({ value: p.id, label: p.name }))} style={{ width: 160 }} />
+          <Select value={quick.productId} onChange={(v) => setQuick({ ...quick, productId: v, variantId: '' })} options={products.map((p) => ({ value: p.id, label: p.name }))} style={{ width: 160 }} />
         </Field>
+        {quickNeedsVariant && (
+          <Field label="Variante">
+            <Select
+              value={quick.variantId}
+              onChange={(v) => setQuick({ ...quick, variantId: v })}
+              options={[
+                { value: '', label: 'Elegir…' },
+                ...quickProduct.variants.map((v) => ({ value: v.id, label: `${variantLabel(quickProduct, v)} (stock ${getVariantStock(quickProduct, v, movements)})` })),
+              ]}
+              style={{ width: 200 }}
+            />
+          </Field>
+        )}
         <Field label="Quién">
           <Select value={quick.personId} onChange={(v) => setQuick({ ...quick, personId: v })} options={[{ value: '', label: '—' }, ...people.map((u) => ({ value: u.id, label: u.name }))]} style={{ width: 140 }} />
         </Field>
@@ -1893,11 +2293,12 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
               {lm.length === 0 && <tr><td colSpan={8} className="muted" style={{ padding: 12 }}>Sin movimientos.</td></tr>}
               {lm.map((m) => {
                 const prod = products.find((p) => p.id === m.productId);
+                const variant = prod?.variants?.find((v) => v.id === m.variantId);
                 const person = people.find((u) => u.id === m.personId);
                 return (
                   <tr key={m.id}>
                     <td className="mt-mono muted">{m.date}</td>
-                    <td style={{ fontWeight: 600 }}>{prod?.name || '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{fullLabel(prod, variant)}</td>
                     <td className="mt-mono">{person?.name || '—'}</td>
                     <td><span className="mt-mono" style={{ color: TYPE_META[m.type]?.color }}>{TYPE_META[m.type]?.label}</span></td>
                     <td className="mt-mono">{m.quantity}</td>
