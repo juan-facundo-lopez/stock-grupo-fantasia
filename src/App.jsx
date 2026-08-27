@@ -6,6 +6,7 @@ import { Productos } from './components/Productos';
 import { Movimientos } from './components/Movimientos';
 import { VentaRapida } from './components/VentaRapida';
 import { Ubicaciones } from './components/Ubicaciones';
+import { Personas } from './components/Personas';
 import { Card, useConfirmDialog, useConfirmMorph, ConfirmContent, SectionTitle, Field, ListToolbar, Select, ImageUploadField, MapsLink } from './components/shared';
 import {
   euro, uid, mapsUrl, waUrl, computeStats, hasVariants, variantLabel, fullLabel,
@@ -446,132 +447,6 @@ function NotAuthorizedScreen({ email, onSignOut }) {
           <LogOut size={15} /> Cerrar sesión
         </button>
       </Card>
-    </div>
-  );
-}
-
-// Dropdown propio (reemplaza <select> nativo) para tener el mismo look que el resto de
-// los inputs y poder animar la apertura — el listbox nativo del navegador no se puede
-// estilizar. options: [{ value, label }]. Mantiene la misma API value/onChange que un
-// select controlado para que el resto del código no cambie.
-// Tarjeta de una persona del equipo dentro de "Personas". Si es la persona logueada
-// (isOwn), suma un botón de lápiz para subir su propia foto (queda guardada en
-// `avatar_override` en Supabase, aparte de la foto de Google) y, si ya eligió una,
-// un botón para volver a la foto de Google.
-function TeamMemberCard({ person, count, isOwn, onUpdateAvatar }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
-  const inputId = useRef(`avatar-upload-${uid()}`).current;
-
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !onUpdateAvatar) return;
-    setUploading(true);
-    setError('');
-    try {
-      const url = await uploadToStorage(file);
-      const { error: saveErr } = await onUpdateAvatar(url);
-      if (saveErr) setError('No se pudo guardar la foto.');
-    } catch (err) {
-      setError(uploadErrorMessage(err));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const revert = async () => {
-    if (!onUpdateAvatar) return;
-    setError('');
-    setUploading(true);
-    const { error: saveErr } = await onUpdateAvatar('');
-    if (saveErr) setError('No se pudo actualizar la foto.');
-    setUploading(false);
-  };
-
-  return (
-    <Card style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-      {person.avatarUrl ? (
-        <img src={person.avatarUrl} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} referrerPolicy="no-referrer" />
-      ) : (
-        <User size={15} color="#2563EB" />
-      )}
-      <div>
-        <div style={{ fontWeight: 600 }}>{person.name}</div>
-        {person.email && <div className="mt-mono muted" style={{ fontSize: 10.5 }}>{person.email}</div>}
-      </div>
-      <span className="mt-mono muted" style={{ fontSize: 11, marginLeft: 4 }}>{count} movimiento{count === 1 ? '' : 's'}</span>
-      {isOwn && (
-        <>
-          <label htmlFor={inputId} className="icon-btn" title="Cambiar mi foto" style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
-            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
-          </label>
-          <input id={inputId} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} disabled={uploading} />
-          {person.hasAvatarOverride && (
-            <button type="button" onClick={revert} className="icon-btn" title="Volver a la foto de Google" disabled={uploading}>
-              <Undo2 size={13} />
-            </button>
-          )}
-        </>
-      )}
-      {error && <div className="mt-mono" style={{ width: '100%', fontSize: 10, color: '#D8493F' }}>{error}</div>}
-    </Card>
-  );
-}
-
-function Personas({ teamPeople, manualPeople, movements, onAdd, onRemove, currentUserId, onUpdateAvatar }) {
-  const [name, setName] = useState('');
-  const [confirmRef, triggerConfirm] = useConfirmMorph();
-  const submit = (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onAdd({ name: name.trim() });
-    triggerConfirm();
-    setName('');
-  };
-  return (
-    <div>
-      <SectionTitle>Equipo</SectionTitle>
-      <p className="muted" style={{ fontSize: 12, marginTop: -6, marginBottom: 12 }}>
-        Se cargan solas cuando alguien del equipo inicia sesión con Google — no hace falta agregarlas a mano.
-        Cada quien puede tocar el lápiz de su propia tarjeta para poner otra foto.
-      </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-        {teamPeople.length === 0 && <p className="muted" style={{ fontSize: 13 }}>Todavía nadie del equipo inició sesión.</p>}
-        {teamPeople.map((u) => {
-          const count = movements.filter((m) => m.personId === u.id).length;
-          return (
-            <TeamMemberCard key={u.id} person={u} count={count} isOwn={u.id === currentUserId} onUpdateAvatar={onUpdateAvatar} />
-          );
-        })}
-      </div>
-
-      <SectionTitle>Agregadas a mano</SectionTitle>
-      <p className="muted" style={{ fontSize: 12, marginTop: -6, marginBottom: 12 }}>
-        Para gente sin cuenta de Google (ej. ayuda puntual en un evento).
-      </p>
-      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 440 }}>
-        <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <Field label="Nombre"><input className="mt-input" style={{ width: 200 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Rocío" required /></Field>
-          <button type="submit" className="mt-btn" ref={confirmRef}>
-            <ConfirmContent><Plus size={14} /> Agregar persona</ConfirmContent>
-          </button>
-        </form>
-      </Card>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-        {manualPeople.length === 0 && <p className="muted" style={{ fontSize: 13 }}>Todavía no hay personas cargadas a mano.</p>}
-        {manualPeople.map((u) => {
-          const count = movements.filter((m) => m.personId === u.id).length;
-          return (
-            <Card key={u.id} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <User size={15} color="#2563EB" />
-              <span style={{ fontWeight: 600 }}>{u.name}</span>
-              <span className="mt-mono muted" style={{ fontSize: 11 }}>{count} movimiento{count === 1 ? '' : 's'}</span>
-              <button onClick={() => onRemove(u.id)} className="icon-btn" style={{ marginLeft: 4 }}><X size={13} /></button>
-            </Card>
-          );
-        })}
-      </div>
     </div>
   );
 }
