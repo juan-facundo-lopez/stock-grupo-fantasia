@@ -5,8 +5,7 @@
 @tailwind utilities;
 
 /* Tema shadcn/ui — preset b2vP1JgrVi (base "neutral", tema "blue", radius "large").
-   Solo lo usan, por ahora, los componentes migrados a Tailwind (Dashboard, Productos).
-   El resto de las pantallas sigue con baseStyles/estilos inline como siempre. */
+   Toda la app esta migrada a Tailwind con estos tokens. */
 @layer base {
   :root {
     --background: 0 0% 100%;

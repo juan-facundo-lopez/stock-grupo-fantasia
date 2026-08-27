@@ -1,60 +1,18 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useId } from 'react';
 import { X, Check, ChevronDown, ImageOff, Upload, Loader2, AlertTriangle, MapPin, MessageCircle } from 'lucide-react';
 import { uid, uploadToStorage, uploadErrorMessage, mapsUrl, waUrl } from '../lib/helpers';
+import { Card } from './ui/card';
+import { Button } from './ui/button';
 
-// --- Componentes compartidos por TODA la app (migrada y sin migrar todavia). ---
-// Movidos tal cual desde App.jsx (misma logica, mismas clases .mt-* / baseStyles de
-// siempre) para que Dashboard.jsx y Productos.jsx los puedan importar sin duplicarlos.
-// Las pantallas ya migradas a shadcn (Dashboard, Productos) NO usan este Card/Field/
-// Select -- tienen su propia version con Tailwind. Este es el que siguen usando
-// Movimientos, Ubicaciones, Personas, Proveedores, Venta rapida, etc. hasta que
-// tambien se migren.
+// --- Componentes compartidos por TODA la app (ya migrada por completo a shadcn/ui). ---
+// Estos son los pocos widgets con logica/UX propia (dropdown animado, subida de imagen,
+// modal de confirmacion) que se usan desde mas de una pantalla -- viven ac fuera para no
+// duplicarlos. Todos en Tailwind, mismos tokens de color/radio/sombra que el resto.
 
-export function Card({ children, style, className = '', onClick }) {
+function Field({ label, children }) {
   return (
-    <div className={`tag-card ${className}`} style={style} onClick={onClick}>
-      {children}
-    </div>
-  );
-}
-
-export function useConfirmMorph() {
-  const ref = useRef(null);
-  const trigger = () => {
-    const btn = ref.current;
-    if (!btn) return;
-    const label = btn.querySelector('.btn-label');
-    const check = btn.querySelector('.btn-check');
-    if (!label || !check) return;
-    label.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.5)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
-    check.animate([{ opacity: 0, transform: 'scale(0.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250, delay: 150, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'forwards' });
-    setTimeout(() => {
-      check.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.5)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
-      label.animate([{ opacity: 0, transform: 'scale(0.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250, delay: 150, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'forwards' });
-    }, 1100);
-  };
-  return [ref, trigger];
-}
-
-export function ConfirmContent({ children }) {
-  return (
-    <>
-      <span className="btn-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{children}</span>
-      <span className="btn-check" style={{ position: 'absolute', inset: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: 0 }}>
-        <Check size={14} /> Listo
-      </span>
-    </>
-  );
-}
-
-export function SectionTitle({ children }) {
-  return <div className="mt-display" style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: '-0.1px', margin: '4px 0 12px', color: '#16181D' }}>{children}</div>;
-}
-
-export function Field({ label, children }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#6B7280' }}>{label}</span>
+    <label className="flex flex-col gap-1">
+      <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
       {children}
     </label>
   );
@@ -62,20 +20,24 @@ export function Field({ label, children }) {
 
 export function ListToolbar({ query, onQueryChange, sortValue, onSortChange, sortOptions, placeholder = 'Buscar por nombre…', resultCount }) {
   return (
-    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+    <div className="flex gap-2.5 flex-wrap items-end mb-3.5">
       <Field label="Buscar">
-        <input className="mt-input" style={{ width: 220 }} placeholder={placeholder} value={query} onChange={(e) => onQueryChange(e.target.value)} />
+        <input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 220 }} placeholder={placeholder} value={query} onChange={(e) => onQueryChange(e.target.value)} />
       </Field>
       <Field label="Ordenar por">
         <Select value={sortValue} onChange={onSortChange} options={sortOptions} style={{ width: 190 }} />
       </Field>
       {typeof resultCount === 'number' && (
-        <span className="mt-mono muted" style={{ fontSize: 11.5, marginBottom: 9 }}>{resultCount} resultado{resultCount === 1 ? '' : 's'}</span>
+        <span className="text-muted-foreground text-[11.5px] pb-2">{resultCount} resultado{resultCount === 1 ? '' : 's'}</span>
       )}
     </div>
   );
 }
 
+// Dropdown propio (reemplaza <select> nativo) para tener el mismo look que el resto de
+// los inputs y poder animar la apertura -- el listbox nativo del navegador no se puede
+// estilizar. options: [{ value, label }]. Mantiene la misma API value/onChange que un
+// select controlado para que el resto del codigo no cambie.
 export function Select({ value, onChange, options, placeholder = 'Seleccionar…', style, disabled = false }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -141,9 +103,9 @@ export function Select({ value, onChange, options, placeholder = 'Seleccionar…
   };
 
   return (
-    <div className="mt-select" ref={rootRef} style={style}>
+    <div className="relative" ref={rootRef} style={style}>
       <div
-        className={`mt-select-field${open ? ' open' : ''}${disabled ? ' disabled' : ''}`}
+        className={`box-border w-full h-9 rounded-md border px-3 text-sm flex items-center justify-between gap-2 cursor-pointer select-none ${open ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : 'border-input hover:border-[#C7CBD3]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
         tabIndex={disabled ? -1 : 0}
         role="combobox"
         aria-haspopup="listbox"
@@ -153,25 +115,28 @@ export function Select({ value, onChange, options, placeholder = 'Seleccionar…
         onClick={() => !disabled && setOpen((o) => !o)}
         onKeyDown={onTriggerKeyDown}
       >
-        <span className={`mt-select-value${!selected ? ' placeholder' : ''}`}>{selected ? selected.label : placeholder}</span>
-        <ChevronDown size={14} className="mt-select-chev" />
+        <span className={`overflow-hidden text-ellipsis whitespace-nowrap ${!selected ? 'text-muted-foreground' : ''}`}>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={`shrink-0 transition-transform ${open ? 'rotate-180 text-primary' : 'text-muted-foreground'}`} />
       </div>
       {open && (
-        <div className="mt-select-panel" ref={panelRef} id={listId} role="listbox">
-          {options.map((opt, i) => (
-            <div
-              key={opt.value}
-              role="option"
-              aria-selected={String(opt.value) === String(value)}
-              className={`mt-select-opt${String(opt.value) === String(value) ? ' selected' : ''}${i === highlight ? ' highlighted' : ''}`}
-              onMouseEnter={() => setHighlight(i)}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(opt)}
-            >
-              <span className="mt-select-opt-label">{opt.label}</span>
-              <Check size={13} className="mt-select-check" />
-            </div>
-          ))}
+        <div className="absolute top-[calc(100%+6px)] left-0 right-0 bg-card border border-border rounded-[11px] shadow-pop p-[5px] z-30 max-h-60 overflow-y-auto overflow-x-hidden box-border" ref={panelRef} id={listId} role="listbox">
+          {options.map((opt, i) => {
+            const isSelected = String(opt.value) === String(value);
+            return (
+              <div
+                key={opt.value}
+                role="option"
+                aria-selected={isSelected}
+                className={`text-sm px-2.5 py-2 rounded-[7px] cursor-pointer flex items-start justify-between gap-2 ${isSelected ? 'bg-primary-tint text-primary font-semibold' : i === highlight ? 'bg-muted' : ''}`}
+                onMouseEnter={() => setHighlight(i)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(opt)}
+              >
+                <span className="min-w-0 whitespace-normal break-words leading-snug">{opt.label}</span>
+                <Check size={13} className={`text-primary shrink-0 mt-px ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -201,33 +166,31 @@ export function ImageUploadField({ value, onChange, label = 'Mockup / imagen', a
 
   return (
     <Field label={label}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="flex items-center gap-2">
         {value ? (
-          <div style={{ position: 'relative' }}>
-            <img src={value} alt="" style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #E1E3E8' }} />
-            <button type="button" onClick={() => onChange('')} className="icon-btn" style={{ position: 'absolute', top: -8, right: -8, background: '#FFFFFF', border: '1.4px solid #E1E3E8', borderRadius: '50%', padding: 2 }}>
+          <div className="relative">
+            <img src={value} alt="" className="w-[34px] h-[34px] object-cover rounded-md border border-border" />
+            <button type="button" onClick={() => onChange('')} className="absolute -top-2 -right-2 bg-card border border-border rounded-full p-0.5 inline-flex items-center justify-center text-muted-foreground hover:text-destructive">
               <X size={10} />
             </button>
           </div>
         ) : (
-          <ImageOff size={18} color="#6B7280" />
+          <ImageOff size={18} className="text-muted-foreground" />
         )}
-        <label htmlFor={inputId} className="mt-btn" style={{ cursor: 'pointer' }}>
+        <label htmlFor={inputId} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold h-10 px-4 bg-primary text-primary-foreground shadow-card hover:brightness-95 cursor-pointer">
           {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
           {uploading ? 'Subiendo…' : value ? 'Cambiar' : 'Subir imagen'}
         </label>
-        <input id={inputId} type="file" accept={accept} onChange={handleFile} style={{ display: 'none' }} disabled={uploading} />
+        <input id={inputId} type="file" accept={accept} onChange={handleFile} className="hidden" disabled={uploading} />
       </div>
-      {error && <span className="mt-mono" style={{ fontSize: 10, color: '#D8493F', maxWidth: 160 }}>{error}</span>}
+      {error && <span className="text-[10px] text-destructive max-w-[160px]">{error}</span>}
     </Field>
   );
 }
 
-// Movido tal cual desde App.jsx -- lo usan tanto el shell principal (MerchTracker) como
-// pantallas sueltas (Movimientos, Ubicaciones) que necesitan su propia confirmacion
-// (ej. "esto va a dejar stock negativo, confirmas?"). Estilo legacy (.tag-card/.mt-btn)
-// a proposito, mismo criterio que ImageUploadField: es un modal chico y puntual, no hace
-// falta reescribirlo en Tailwind para que una pantalla ya migrada se vea bien.
+// Modal de confirmacion generico (ej. "esto va a dejar stock negativo, confirmas?").
+// Lo usan tanto el shell principal (MerchTracker) como pantallas sueltas (Movimientos,
+// Ubicaciones) que necesitan su propia confirmacion puntual.
 export function useConfirmDialog() {
   const [pending, setPending] = useState(null); // { message }
   const resolveRef = useRef(null);
@@ -248,35 +211,29 @@ export function useConfirmDialog() {
   const dialog = pending ? (
     <div
       onClick={() => answer(false)}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(16,20,24,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      className="fixed inset-0 bg-black/40 z-[200] flex items-center justify-center p-4"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="tag-card"
-        style={{ maxWidth: 380, width: '100%', padding: 18 }}
-      >
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 18 }}>
-          <AlertTriangle size={18} color="#D8493F" style={{ flexShrink: 0, marginTop: 1 }} />
-          <p className="mt-mono" style={{ fontSize: 13, lineHeight: 1.5, margin: 0 }}>{pending.message}</p>
+      <Card onClick={(e) => e.stopPropagation()} className="max-w-[380px] w-full p-[18px]">
+        <div className="flex gap-2.5 items-start mb-[18px]">
+          <AlertTriangle size={18} className="text-destructive shrink-0 mt-px" />
+          <p className="text-sm leading-relaxed m-0">{pending.message}</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={() => answer(false)} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1.4px solid #E1E3E8' }}>
+        <div className="flex gap-2 justify-end">
+          <Button type="button" variant="outline" onClick={() => answer(false)}>
             Cancelar
-          </button>
-          <button type="button" onClick={() => answer(true)} className="mt-btn" style={{ background: '#D8493F' }}>
+          </Button>
+          <Button type="button" className="bg-[#D8493F] text-white hover:bg-[#B23A31]" onClick={() => answer(true)}>
             Confirmar igual
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   ) : null;
 
   return { confirm, dialog };
 }
 
-// Movidos tal cual desde App.jsx (ahora en Tailwind, son chicos y sencillos). Los usan
-// Ubicaciones.jsx y Proveedores (este ultimo todavia sin migrar, sigue importando desde
-// aca igual que antes).
+// Movidos tal cual desde App.jsx. Los usan Ubicaciones.jsx y Proveedores.jsx.
 export function MapsLink({ address }) {
   if (!address) return null;
   return (

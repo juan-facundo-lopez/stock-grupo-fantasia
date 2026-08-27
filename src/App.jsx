@@ -1,5 +1,5 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef, useId } from 'react';
-import { Plus, Trash2, Package, TrendingUp, AlertTriangle, Store, Warehouse, LayoutGrid, ListPlus, Tags, X, Loader2, ChevronDown, User, Users, Wifi, WifiOff, Truck, Mail, Upload, ImageOff, Pencil, Download, LogIn, LogOut, ShieldAlert, Menu, Zap, Minus, Undo2, Check, MapPin, MessageCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Loader2, LogIn, ShieldAlert, LogOut, Menu, X, Wifi, WifiOff, User, LayoutGrid, Zap, ListPlus, Package, Store, Users, Truck } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { Dashboard } from './components/Dashboard';
 import { Productos } from './components/Productos';
@@ -8,12 +8,10 @@ import { VentaRapida } from './components/VentaRapida';
 import { Ubicaciones } from './components/Ubicaciones';
 import { Personas } from './components/Personas';
 import { Proveedores } from './components/Proveedores';
-import { Card, useConfirmDialog, useConfirmMorph, ConfirmContent, SectionTitle, Field, ListToolbar, Select, ImageUploadField } from './components/shared';
-import {
-  euro, uid, mapsUrl, waUrl, computeStats, hasVariants, variantLabel, fullLabel,
-  getVariantStock, getVariantStockDeposito, getProductStock, getProductStockDeposito,
-  uploadToStorage, uploadErrorMessage,
-} from './lib/helpers';
+import { Card } from './components/ui/card';
+import { Button } from './components/ui/button';
+import { useConfirmDialog } from './components/shared';
+import { uid, computeStats, hasVariants, fullLabel } from './lib/helpers';
 
 const STORAGE_KEY = 'merch-tracker-v1';
 
@@ -203,10 +201,11 @@ export default function MerchTracker() {
 
   if (cloudOn && session === undefined) {
     return (
-      <div className="mt-root" style={{ padding: 40, textAlign: 'center' }}>
-        <style>{baseStyles}</style>
-        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#2563EB' }} />
-        <p className="mt-mono" style={{ marginTop: 10, fontSize: 13, color: '#6B7280' }}>Verificando sesión…</p>
+      <div className="font-sans bg-[#EDEEF1] text-foreground min-h-full flex items-center justify-center p-10 text-center">
+        <div>
+          <Loader2 className="animate-spin mx-auto text-primary" />
+          <p className="mt-2.5 text-[13px] text-muted-foreground">Verificando sesión…</p>
+        </div>
       </div>
     );
   }
@@ -221,10 +220,11 @@ export default function MerchTracker() {
 
   if (loading || !data) {
     return (
-      <div className="mt-root" style={{ padding: 40, textAlign: 'center' }}>
-        <style>{baseStyles}</style>
-        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#2563EB' }} />
-        <p className="mt-mono" style={{ marginTop: 10, fontSize: 13, color: '#6B7280' }}>Cargando stock…</p>
+      <div className="font-sans bg-[#EDEEF1] text-foreground min-h-full flex items-center justify-center p-10 text-center">
+        <div>
+          <Loader2 className="animate-spin mx-auto text-primary" />
+          <p className="mt-2.5 text-[13px] text-muted-foreground">Cargando stock…</p>
+        </div>
       </div>
     );
   }
@@ -290,30 +290,41 @@ export default function MerchTracker() {
   const undoMovement = (id) => persist({ ...data, movements: data.movements.filter((m) => m.id !== id) });
 
   return (
-    <div className="mt-root" style={{ minHeight: '100%' }}>
-      <style>{baseStyles}</style>
+    <div className="font-sans bg-[#EDEEF1] text-foreground min-h-full">
       {confirmDialog}
 
       {!mobileNavOpen && (
-        <button onClick={() => setMobileNavOpen(true)} className="mt-hamburger" aria-label="Abrir menú">
+        <button
+          onClick={() => setMobileNavOpen(true)}
+          className="hidden max-[880px]:flex fixed top-4 left-4 z-[55] w-10 h-10 rounded-[10px] bg-card border border-border shadow-sm items-center justify-center cursor-pointer text-foreground"
+          aria-label="Abrir menú"
+        >
           <Menu size={18} />
         </button>
       )}
-      {mobileNavOpen && <div className="mt-overlay" onClick={() => setMobileNavOpen(false)} />}
+      {mobileNavOpen && (
+        <div className="hidden max-[880px]:block fixed inset-0 bg-black/35 z-40" onClick={() => setMobileNavOpen(false)} />
+      )}
 
-      <nav className={`mt-sidebar${mobileNavOpen ? ' mt-sidebar-open' : ''}`} style={{ position: 'fixed', top: 16, left: 16, bottom: 16, width: 208, background: '#FFFFFF', border: '1px solid #EDEEF1', borderRadius: 16, boxShadow: '0 1px 2px rgba(16,20,24,0.04), 0 1px 1px rgba(16,20,24,0.03)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px 16px' }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: '#16181D', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, flexShrink: 0 }}>M</div>
-          <h1 className="mt-display" style={{ fontSize: 13.5, fontWeight: 700, margin: 0, color: '#16181D', letterSpacing: '-0.2px', lineHeight: 1.15 }}>Merch Tracker</h1>
-          <button onClick={() => setMobileNavOpen(false)} className="mt-drawer-close icon-btn" style={{ marginLeft: 'auto' }} aria-label="Cerrar menú">
+      <nav
+        className={`fixed top-4 left-4 bottom-4 w-52 bg-card border border-border rounded-2xl shadow-card p-3 flex flex-col gap-0.5 overflow-y-auto z-50 max-[880px]:w-[min(82vw,260px)] max-[880px]:shadow-pop max-[880px]:transition-transform max-[880px]:duration-[250ms] max-[880px]:ease-out ${mobileNavOpen ? 'max-[880px]:translate-x-0' : 'max-[880px]:-translate-x-[120%]'}`}
+      >
+        <div className="flex items-center gap-2 px-2 pt-1.5 pb-4">
+          <div className="w-[26px] h-[26px] rounded-[7px] bg-[#16181D] text-white flex items-center justify-center text-[13px] font-extrabold shrink-0">M</div>
+          <h1 className="font-heading text-[13.5px] font-bold m-0 tracking-tight leading-tight">Merch Tracker</h1>
+          <button
+            onClick={() => setMobileNavOpen(false)}
+            className="hidden max-[880px]:flex ml-auto items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-muted"
+            aria-label="Cerrar menú"
+          >
             <X size={16} />
           </button>
         </div>
-        <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#EB2563' : '#9CA3AF', padding: '0 8px 4px' }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
-        <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 14px', color: cloudOn ? '#2563EB' : '#9CA3AF' }}>
+        <span className={`text-[10.5px] px-2 pb-1 ${saving ? 'text-warning' : 'text-muted-foreground'}`}>{saving ? 'guardando…' : 'guardado ✓'}</span>
+        <span className={`text-[10px] flex items-center gap-1 px-2 pb-3.5 ${cloudOn ? 'text-primary' : 'text-muted-foreground'}`}>
           {cloudOn ? <Wifi size={11} /> : <WifiOff size={11} />} {cloudOn ? 'compartido (Supabase)' : 'solo local'}
         </span>
-        <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, padding: '0 10px 6px' }}>Menú</span>
+        <span className="text-[10px] tracking-[1.5px] text-muted-foreground uppercase font-semibold px-2.5 pb-1.5">Menú</span>
         {[
           { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, badge: lowStock.length },
           { id: 'venta-rapida', label: 'Venta rápida', icon: Zap },
@@ -341,49 +352,38 @@ export default function MerchTracker() {
               setTab(id);
               setMobileNavOpen(false);
             }}
-            className="mt-mono tab-btn"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', fontSize: 13,
-              border: 'none',
-              background: tab === id ? '#EFF4FF' : 'transparent', color: tab === id ? '#2563EB' : '#6B7280',
-              borderRadius: 8, cursor: 'pointer', fontWeight: tab === id ? 600 : 500, width: '100%', textAlign: 'left',
-            }}
+            className={`flex items-center gap-2 px-2.5 py-2 text-[13px] border-none rounded-lg cursor-pointer w-full text-left ${tab === id ? 'bg-primary-tint text-primary font-semibold' : 'bg-transparent text-muted-foreground font-medium hover:text-foreground'}`}
           >
-            <Icon size={15} color={tab === id ? '#2563EB' : '#9CA3AF'} /> {label}
+            <Icon size={15} className={tab === id ? 'text-primary' : 'text-muted-foreground'} /> {label}
             {!!badge && (
-              <span className="mt-mono" style={{ marginLeft: 'auto', background: '#FBEAE9', color: '#D8493F', borderRadius: 20, fontSize: 10.5, padding: '1px 6px', fontWeight: 700 }}>{badge}</span>
+              <span className="ml-auto bg-destructive-bg text-destructive rounded-full text-[10.5px] px-1.5 py-px font-bold">{badge}</span>
             )}
           </button>
         ))}
         {cloudOn && (
-          <div style={{ marginTop: 'auto' }}>
-            <div className="perforation" style={{ margin: '10px 8px' }} />
+          <div className="mt-auto">
+            <div className="bg-[#EDEEF1] h-px my-2.5 mx-2" />
             <button
               onClick={signOut}
-              className="mt-mono"
               title={userEmail}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', fontSize: 12.5,
-                border: 'none', background: 'transparent', color: '#9CA3AF',
-                borderRadius: 8, cursor: 'pointer', fontWeight: 500, width: '100%', textAlign: 'left',
-              }}
+              className="flex items-center gap-2 px-2.5 py-2 text-[12.5px] border-none bg-transparent text-muted-foreground rounded-lg cursor-pointer font-medium w-full text-left"
             >
               {(ownAvatarOverride || userAvatar) ? (
-                <img src={ownAvatarOverride || userAvatar} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                <img src={ownAvatarOverride || userAvatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
               ) : (
-                <User size={14} style={{ flexShrink: 0 }} />
+                <User size={14} className="shrink-0" />
               )}
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</span>
-              <LogOut size={13} style={{ flexShrink: 0 }} />
+              <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{userName}</span>
+              <LogOut size={13} className="shrink-0" />
             </button>
           </div>
         )}
       </nav>
 
-      <div className="mt-content" style={{ marginLeft: 240, paddingTop: 16 }}>
-        <main className="mt-main" style={{ padding: '0 20px 40px' }}>
+      <div className="ml-60 pt-4 max-[880px]:ml-0 max-[880px]:pt-16">
+        <main className="px-5 pb-10 max-[880px]:px-3.5 max-[880px]:pb-8">
           {toast && (
-            <div className="mt-mono" style={{ background: '#FBEAE9', border: '1px solid #F5C6C2', color: '#B23A31', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16 }}>
+            <div className="bg-destructive-bg border border-destructive-border text-destructive px-3.5 py-2.5 rounded-xl text-[12.5px] mb-4">
               {toast}
             </div>
           )}
@@ -417,18 +417,17 @@ export default function MerchTracker() {
 
 function LoginScreen({ onSignIn, error }) {
   return (
-    <div className="mt-root" style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <style>{baseStyles}</style>
-      <Card style={{ padding: '36px 32px', maxWidth: 340, width: '100%', textAlign: 'center' }}>
-        <div style={{ width: 40, height: 40, borderRadius: 11, background: '#16181D', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, margin: '0 auto 16px' }}>M</div>
-        <h1 className="mt-display" style={{ fontSize: 17, fontWeight: 700, margin: '0 0 6px', color: '#16181D' }}>Merch Tracker</h1>
-        <p className="mt-mono" style={{ fontSize: 12.5, color: '#6B7280', margin: '0 0 24px', lineHeight: 1.5 }}>
+    <div className="font-sans bg-[#EDEEF1] text-foreground min-h-full flex items-center justify-center p-6">
+      <Card className="p-9 max-w-[340px] w-full text-center">
+        <div className="w-10 h-10 rounded-[11px] bg-[#16181D] text-white flex items-center justify-center text-lg font-extrabold mx-auto mb-4">M</div>
+        <h1 className="font-heading text-[17px] font-bold m-0 mb-1.5">Merch Tracker</h1>
+        <p className="text-[12.5px] text-muted-foreground m-0 mb-6 leading-relaxed">
           Iniciá sesión con tu cuenta de Google para acceder al stock de Grupo Fantasía.
         </p>
-        <button onClick={onSignIn} className="mt-btn" style={{ width: '100%' }}>
+        <Button onClick={onSignIn} className="w-full">
           <LogIn size={15} /> Continuar con Google
-        </button>
-        {error && <p className="mt-mono" style={{ fontSize: 11.5, color: '#D8493F', marginTop: 14 }}>{error}</p>}
+        </Button>
+        {error && <p className="text-[11.5px] text-destructive mt-3.5">{error}</p>}
       </Card>
     </div>
   );
@@ -436,80 +435,17 @@ function LoginScreen({ onSignIn, error }) {
 
 function NotAuthorizedScreen({ email, onSignOut }) {
   return (
-    <div className="mt-root" style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <style>{baseStyles}</style>
-      <Card style={{ padding: '36px 32px', maxWidth: 360, width: '100%', textAlign: 'center' }}>
-        <ShieldAlert size={30} color="#D8493F" style={{ margin: '0 auto 14px' }} />
-        <h1 className="mt-display" style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px', color: '#16181D' }}>Sin acceso</h1>
-        <p className="mt-mono" style={{ fontSize: 12.5, color: '#6B7280', margin: '0 0 20px', lineHeight: 1.5 }}>
-          La cuenta <strong style={{ color: '#16181D' }}>{email}</strong> no tiene permiso para entrar acá. Pedile a un administrador que te agregue.
+    <div className="font-sans bg-[#EDEEF1] text-foreground min-h-full flex items-center justify-center p-6">
+      <Card className="p-9 max-w-[360px] w-full text-center">
+        <ShieldAlert size={30} className="text-destructive mx-auto mb-3.5" />
+        <h1 className="font-heading text-base font-bold m-0 mb-2">Sin acceso</h1>
+        <p className="text-[12.5px] text-muted-foreground m-0 mb-5 leading-relaxed">
+          La cuenta <strong className="text-foreground">{email}</strong> no tiene permiso para entrar acá. Pedile a un administrador que te agregue.
         </p>
-        <button onClick={onSignOut} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1px solid #E1E3E8', boxShadow: 'none', width: '100%' }}>
+        <Button variant="outline" onClick={onSignOut} className="w-full">
           <LogOut size={15} /> Cerrar sesión
-        </button>
+        </Button>
       </Card>
     </div>
   );
 }
-
-const baseStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
-  .mt-root { font-family: 'Poppins', sans-serif; background: #EDEEF1; color: #16181D; }
-  .mt-display { font-family: 'Poppins', sans-serif; }
-  .mt-mono { font-family: 'Poppins', sans-serif; }
-  .muted { color: #6B7280; }
-  .perforation { background: #EDEEF1; height: 1px; }
-  .tag-card { position: relative; border: 1px solid #EDEEF1; background: #FFFFFF; border-radius: 14px; box-shadow: 0 1px 2px rgba(16,20,24,0.04), 0 1px 1px rgba(16,20,24,0.03); }
-  .mt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  .mt-table th { text-align: left; font-family: 'Poppins', sans-serif; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: #9CA3AF; font-weight: 600; padding: 10px 14px; border-bottom: 1px solid #EDEEF1; }
-  .mt-table td { padding: 11px 14px; border-bottom: 1px solid #F3F4F6; }
-  .mt-table tr:last-child td { border-bottom: none; }
-  .mt-input { box-sizing: border-box; height: 38px; border: 1px solid #E1E3E8; background: #FFFFFF; border-radius: 9px; padding: 0 10px; font-size: 13px; font-family: 'Poppins', sans-serif; color: #16181D; }
-  .mt-input:focus { outline: 2px solid #2563EB; outline-offset: 1px; }
-
-  .mt-select { position: relative; font-family: 'Poppins', sans-serif; }
-  .mt-select-field { box-sizing: border-box; width: 100%; height: 38px; border: 1px solid #E1E3E8; background: #FFFFFF; border-radius: 9px; padding: 0 10px; font-size: 13px; color: #16181D; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
-  .mt-select-field:hover { border-color: #C7CBD3; }
-  .mt-select-field.open { border-color: #2563EB; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
-  .mt-select-field:focus { outline: none; }
-  .mt-select-field:focus-visible { outline: 2px solid #2563EB; outline-offset: 1px; }
-  .mt-select-field.disabled { cursor: not-allowed; opacity: 0.55; }
-  .mt-select-chev { color: #9CA3AF; flex-shrink: 0; transition: transform .2s ease; }
-  .mt-select-field.open .mt-select-chev { transform: rotate(180deg); color: #2563EB; }
-  .mt-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mt-select-value.placeholder { color: #9CA3AF; }
-  .mt-select-panel { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #FFFFFF; border: 1px solid #EDEEF1; border-radius: 11px; box-shadow: 0 8px 24px rgba(16,20,24,0.12), 0 2px 6px rgba(16,20,24,0.06); padding: 5px; z-index: 30; max-height: 240px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
-  .mt-select-opt { font-size: 13px; padding: 9px 10px; border-radius: 7px; cursor: pointer; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-  .mt-select-opt:hover, .mt-select-opt.highlighted { background: #F7F7F8; }
-  .mt-select-opt.selected { background: #EFF4FF; color: #1D4ED8; font-weight: 600; }
-  .mt-select-opt.selected.highlighted { background: #DCE9FE; }
-  .mt-select-opt-label { min-width: 0; white-space: normal; word-break: break-word; line-height: 1.35; }
-  .mt-select-opt .mt-select-check { color: #2563EB; opacity: 0; width: 13px; height: 13px; flex-shrink: 0; margin-top: 1px; }
-  .mt-select-opt.selected .mt-select-check { opacity: 1; }
-  .mt-btn { position: relative; box-sizing: border-box; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; border: none; border-radius: 9px; padding: 0 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Poppins', sans-serif; box-shadow: 0 1px 2px rgba(16,20,24,0.08); transition: background .15s ease, box-shadow .15s ease, transform .1s ease; white-space: nowrap; flex-shrink: 0; }
-  .mt-btn:hover { background: #1D4ED8; box-shadow: 0 4px 12px rgba(37,99,235,0.28); transform: translateY(-1px); }
-  .mt-btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(16,20,24,0.08); }
-  .icon-btn { background: none; border: none; color: #9CA3AF; cursor: pointer; padding: 8px; display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; border-radius: 8px; }
-  .icon-btn:hover { color: #D8493F; background: #F7F7F8; }
-  .icon-btn:disabled { cursor: not-allowed; opacity: 0.4; }
-  .icon-btn:disabled:hover { background: none; color: #9CA3AF; }
-  .tab-btn:hover { color: #16181D; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .animate-spin { animation: spin 1s linear infinite; }
-
-  .mt-hamburger { display: none; position: fixed; top: 16px; left: 16px; z-index: 55; width: 40px; height: 40px; border-radius: 10px; background: #FFFFFF; border: 1px solid #EDEEF1; box-shadow: 0 1px 2px rgba(16,20,24,0.08); align-items: center; justify-content: center; cursor: pointer; color: #16181D; }
-  .mt-overlay { display: none; }
-  .mt-drawer-close { display: none; }
-  @media (max-width: 880px) {
-    .mt-hamburger { display: flex; }
-    .mt-overlay { display: block; position: fixed; inset: 0; background: rgba(16,20,24,0.35); z-index: 45; }
-    .mt-drawer-close { display: flex; }
-    .mt-sidebar { transform: translateX(-120%) !important; transition: transform .25s ease; z-index: 50; width: min(82vw, 260px) !important; }
-    .mt-sidebar.mt-sidebar-open { transform: translateX(0) !important; box-shadow: 0 10px 40px rgba(16,20,24,0.28); }
-    .mt-content { margin-left: 0 !important; padding-top: 64px !important; }
-    .mt-main { padding: 0 14px 32px !important; }
-  }
-  @media (max-width: 480px) {
-    .mt-table th, .mt-table td { padding: 8px 10px; }
-  }
-`;
