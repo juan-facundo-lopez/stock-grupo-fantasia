@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { Store, Warehouse } from 'lucide-react';
 
 // --- Helpers puros, compartidos por TODA la app (migrada y sin migrar todavia). ---
 // Movidos tal cual desde App.jsx, sin cambiar una linea de logica -- solo cambia
@@ -166,3 +167,17 @@ export function uploadErrorMessage(err) {
   if (!raw) return 'No se pudo subir la imagen (no llegó un motivo desde Supabase). Probá de nuevo o con otra foto.';
   return `No se pudo subir la imagen: ${raw}`;
 }
+
+// Movidos tal cual desde App.jsx -- datos usados por Ubicaciones.jsx (y antes por el
+// formulario de telefono ahi mismo). Los valores internos ('restaurante'/'oficina') no
+// cambian -- solo como se muestran en pantalla.
+export const LOCATION_TYPE_META = {
+  restaurante: { label: 'Punto de venta', icon: Store },
+  oficina: { label: 'Almacén', icon: Warehouse },
+};
+
+export const PHONE_COUNTRIES = [
+  { code: '+54', label: 'Argentina (+54)' },
+  { code: '+34', label: 'España (+34)' },
+  { code: '', label: 'Otro (número completo)' },
+];

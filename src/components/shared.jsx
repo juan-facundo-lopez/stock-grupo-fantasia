@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useId } from 'react';
-import { X, Check, ChevronDown, ImageOff, Upload, Loader2, AlertTriangle } from 'lucide-react';
-import { uid, uploadToStorage, uploadErrorMessage } from '../lib/helpers';
+import { X, Check, ChevronDown, ImageOff, Upload, Loader2, AlertTriangle, MapPin, MessageCircle } from 'lucide-react';
+import { uid, uploadToStorage, uploadErrorMessage, mapsUrl, waUrl } from '../lib/helpers';
 
 // --- Componentes compartidos por TODA la app (migrada y sin migrar todavia). ---
 // Movidos tal cual desde App.jsx (misma logica, mismas clases .mt-* / baseStyles de
@@ -272,4 +272,27 @@ export function useConfirmDialog() {
   ) : null;
 
   return { confirm, dialog };
+}
+
+// Movidos tal cual desde App.jsx (ahora en Tailwind, son chicos y sencillos). Los usan
+// Ubicaciones.jsx y Proveedores (este ultimo todavia sin migrar, sigue importando desde
+// aca igual que antes).
+export function MapsLink({ address }) {
+  if (!address) return null;
+  return (
+    <a href={mapsUrl(address)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11.5px] text-primary no-underline font-semibold">
+      <MapPin size={12} /> Ver en Maps
+    </a>
+  );
+}
+
+// Link directo a un chat de WhatsApp con el telefono cargado, usando el codigo de pais elegido.
+export function WhatsAppLink({ phone, phoneCountry }) {
+  const url = waUrl(phone, phoneCountry);
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11.5px] no-underline font-semibold" style={{ color: '#25A25A' }}>
+      <MessageCircle size={12} /> WhatsApp
+    </a>
+  );
 }
