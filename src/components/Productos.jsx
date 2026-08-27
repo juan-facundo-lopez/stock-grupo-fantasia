@@ -224,6 +224,11 @@ export function Productos({ products, stats, providers, onAdd, onUpdate, onRemov
 
   return (
     <div className="font-sans">
+      <div className="mb-[18px]">
+        <h1 className="font-heading text-xl font-bold m-0 mb-0.5">Productos</h1>
+        <p className="m-0 text-[12.5px] text-muted-foreground">Alta, edición y stock de cada producto.</p>
+      </div>
+
       <Card className={`p-4 mb-5 ${editingId ? 'border-warning' : ''}`}>
         {editingId && (
           <div className="text-sm font-bold text-warning mb-2.5">

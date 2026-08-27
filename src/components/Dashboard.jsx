@@ -99,6 +99,11 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
 
   return (
     <div className="font-sans">
+      <div className="mb-[18px]">
+        <h1 className="font-heading text-xl font-bold m-0 mb-0.5">Dashboard</h1>
+        <p className="m-0 text-[12.5px] text-muted-foreground">Estado general de stock y ventas de Grupo Fantasía.</p>
+      </div>
+
       <Card className="p-3 mb-4">
         <div className="flex gap-2.5 flex-wrap items-end">
           <Field label="Desde"><input className="h-9 rounded-md border border-input px-3 text-sm" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
@@ -120,7 +125,7 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
       </Card>
 
       <div className="flex gap-3 flex-wrap mb-5">
-        <KpiCard label="Recaudado" value={euro(totalRecaudadoFiltered)} accentClass="text-success" />
+        <KpiCard label="Recaudado" value={euro(totalRecaudadoFiltered)} accentClass="text-primary" />
         <KpiCard label="Vendido (uds)" value={totalVendidoFiltered} />
         <KpiCard label="Invertido" value={euro(totalInvertido)} accentClass="text-warning" />
         <KpiCard label="Stock restante" value={totalStock} />
@@ -186,9 +191,9 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <div className="flex items-center gap-1.5">
-                          <span className={`min-w-[34px] ${pct >= 100 ? 'font-bold text-success' : ''}`}>{pct.toFixed(0)}%</span>
+                          <span className={`min-w-[34px] ${pct >= 100 ? 'font-bold text-primary' : ''}`}>{pct.toFixed(0)}%</span>
                           <div className="w-[50px] h-1.5 rounded bg-muted overflow-hidden shrink-0">
-                            <div className={`h-full ${pct >= 100 ? 'bg-success' : 'bg-warning'}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                            <div className={`h-full ${pct >= 100 ? 'bg-primary' : 'bg-warning'}`} style={{ width: `${Math.min(100, pct)}%` }} />
                           </div>
                         </div>
                       )}
@@ -227,7 +232,7 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
             <Card key={loc.id} className="p-[14px_16px] flex-1 min-w-[160px]">
               <div className="font-bold mb-1.5">{loc.name}</div>
               <div className="text-muted-foreground text-xs">{uds} unidades</div>
-              <div className="text-[15px] text-success font-semibold">{euro(monto)}</div>
+              <div className="text-[15px] text-primary font-semibold">{euro(monto)}</div>
             </Card>
           );
         })}
@@ -237,7 +242,7 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
       <div className="flex gap-3 flex-wrap mb-6">
         <Card className="p-4 flex-1 min-w-[320px]">
           <div className="text-[10.5px] font-bold uppercase text-slate-400 mb-2.5">Recaudado por producto</div>
-          <BarChart data={filteredStats.map((p) => ({ label: p.name, value: p.recaudado }))} colorClass="bg-success" valueFormat={euro} />
+          <BarChart data={filteredStats.map((p) => ({ label: p.name, value: p.recaudado }))} colorClass="bg-primary" valueFormat={euro} />
         </Card>
         <Card className="p-4 flex-1 min-w-[320px]">
           <div className="text-[10.5px] font-bold uppercase text-slate-400 mb-2.5">Recaudado por punto de venta</div>
