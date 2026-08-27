@@ -1539,6 +1539,26 @@ async function uploadToStorage(file, bucket = 'mockups') {
   return pub.publicUrl;
 }
 
+// Traduce el error real que devuelve Supabase Storage a un mensaje que ayude a
+// diagnosticar por qué falló ESTA subida en particular (antes siempre se mostraba el
+// mismo tip genérico sobre el bucket, aunque la causa fuera otra — típicamente el tamaño
+// del archivo o el formato, ej. fotos HEIC que sacan los iPhone por default).
+function uploadErrorMessage(err) {
+  const raw = err?.message || err?.error_description || '';
+  const low = raw.toLowerCase();
+  if (low.includes('exceeded') || low.includes('too large') || low.includes('payload')) {
+    return `La imagen es demasiado pesada para el límite configurado en el bucket "mockups" (Supabase → Storage → mockups → Configuración). Probá con una foto más liviana o subí el límite ahí. (${raw})`;
+  }
+  if (low.includes('mime type') || low.includes('not supported') || low.includes('not allowed')) {
+    return `El formato de este archivo no está permitido en el bucket "mockups" — las fotos que sacan algunos celulares (ej. HEIC de iPhone) no son jpg/png. Probá exportarla como JPG o sumar ese formato en Supabase → Storage → mockups → Configuración → tipos MIME permitidos. (${raw})`;
+  }
+  if (low.includes('row-level security') || low.includes('permission') || low.includes('not authorized') || low.includes('403')) {
+    return `Supabase rechazó la subida por permisos (política de la tabla/bucket). Revisá las políticas de Storage para "mockups". (${raw})`;
+  }
+  if (!raw) return 'No se pudo subir la imagen (no llegó un motivo desde Supabase). Probá de nuevo o con otra foto.';
+  return `No se pudo subir la imagen: ${raw}`;
+}
+
 function ImageUploadField({ value, onChange, label = 'Mockup / imagen', accept = 'image/*,application/pdf' }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -1554,7 +1574,7 @@ function ImageUploadField({ value, onChange, label = 'Mockup / imagen', accept =
       const url = await uploadToStorage(file);
       onChange(url);
     } catch (err) {
-      setError('No se pudo subir la imagen. ¿Creaste el bucket "mockups" en Supabase?');
+      setError(uploadErrorMessage(err));
     } finally {
       setUploading(false);
     }
@@ -2336,8 +2356,8 @@ function TeamMemberCard({ person, count, isOwn, onUpdateAvatar }) {
       const url = await uploadToStorage(file);
       const { error: saveErr } = await onUpdateAvatar(url);
       if (saveErr) setError('No se pudo guardar la foto.');
-    } catch {
-      setError('No se pudo subir la foto. ¿Existe el bucket "mockups" en Supabase?');
+    } catch (err) {
+      setError(uploadErrorMessage(err));
     } finally {
       setUploading(false);
     }
