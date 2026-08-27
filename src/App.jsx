@@ -26,7 +26,7 @@ const seedData = {
 
 const TYPE_META = {
   entrega: { label: 'Entrega a punto de venta', color: '#3E6B8A' },
-  venta: { label: 'Venta', color: '#3D7A5C' },
+  venta: { label: 'Venta', color: '#2563EB' },
   fallada: { label: 'Fallada', color: '#D8493F' },
   regalada: { label: 'Regalada', color: '#B8791A' },
   ingreso: { label: 'Ingreso / restock (compra nueva)', color: '#6B4F8A' },
@@ -263,7 +263,7 @@ export default function MerchTracker() {
     return (
       <div className="mt-root" style={{ padding: 40, textAlign: 'center' }}>
         <style>{baseStyles}</style>
-        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#3D7A5C' }} />
+        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#2563EB' }} />
         <p className="mt-mono" style={{ marginTop: 10, fontSize: 13, color: '#6B7280' }}>Verificando sesión…</p>
       </div>
     );
@@ -281,7 +281,7 @@ export default function MerchTracker() {
     return (
       <div className="mt-root" style={{ padding: 40, textAlign: 'center' }}>
         <style>{baseStyles}</style>
-        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#3D7A5C' }} />
+        <Loader2 className="animate-spin" style={{ margin: '0 auto', color: '#2563EB' }} />
         <p className="mt-mono" style={{ marginTop: 10, fontSize: 13, color: '#6B7280' }}>Cargando stock…</p>
       </div>
     );
@@ -368,7 +368,7 @@ export default function MerchTracker() {
           </button>
         </div>
         <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#B8791A' : '#9CA3AF', padding: '0 8px 4px' }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
-        <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 14px', color: cloudOn ? '#3D7A5C' : '#9CA3AF' }}>
+        <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 14px', color: cloudOn ? '#2563EB' : '#9CA3AF' }}>
           {cloudOn ? <Wifi size={11} /> : <WifiOff size={11} />} {cloudOn ? 'compartido (Supabase)' : 'solo local'}
         </span>
         <span className="mt-mono" style={{ fontSize: 10, letterSpacing: 1.5, color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 600, padding: '0 10px 6px' }}>Menú</span>
@@ -403,11 +403,11 @@ export default function MerchTracker() {
             style={{
               display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', fontSize: 13,
               border: 'none',
-              background: tab === id ? '#E8F2EC' : 'transparent', color: tab === id ? '#3D7A5C' : '#6B7280',
+              background: tab === id ? '#EFF4FF' : 'transparent', color: tab === id ? '#2563EB' : '#6B7280',
               borderRadius: 8, cursor: 'pointer', fontWeight: tab === id ? 600 : 500, width: '100%', textAlign: 'left',
             }}
           >
-            <Icon size={15} color={tab === id ? '#3D7A5C' : '#9CA3AF'} /> {label}
+            <Icon size={15} color={tab === id ? '#2563EB' : '#9CA3AF'} /> {label}
             {!!badge && (
               <span className="mt-mono" style={{ marginLeft: 'auto', background: '#FBEAE9', color: '#D8493F', borderRadius: 20, fontSize: 10.5, padding: '1px 6px', fontWeight: 700 }}>{badge}</span>
             )}
@@ -823,13 +823,13 @@ function VentaRapida({ stats, locations, people, movements, onAdd, onUndo, onNav
       </Card>
 
       {flash && (
-        <div className="mt-mono" style={{ background: '#E8F2EC', border: '1px solid #BFE0CC', color: '#3D7A5C', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="mt-mono" style={{ background: '#EFF4FF', border: '1px solid #CFE0FB', color: '#2563EB', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span>{flash.text}</span>
           {flash.movementId && (
             <button
               onClick={() => { onUndo(flash.movementId); setFlash(null); }}
               className="mt-mono"
-              style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'transparent', border: '1.4px solid #3D7A5C', color: '#3D7A5C', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'transparent', border: '1.4px solid #2563EB', color: '#2563EB', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}
             >
               <Undo2 size={12} /> Deshacer
             </button>
@@ -930,7 +930,7 @@ function MapsLink({ address }) {
       target="_blank"
       rel="noopener noreferrer"
       className="mt-mono"
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#3D7A5C', textDecoration: 'none', fontWeight: 600 }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}
     >
       <MapPin size={12} /> Ver en Maps
     </a>
@@ -1066,13 +1066,13 @@ function Ubicaciones({ locations, products, movements, people, onAdd, onUpdate, 
             <Card
               key={l.id}
               onClick={() => setSelectedId(l.id === selectedId ? null : l.id)}
-              style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer', borderColor: editingId === l.id ? '#B8791A' : (selectedId === l.id ? '#3D7A5C' : '#E1E3E8') }}
+              style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer', borderColor: editingId === l.id ? '#B8791A' : (selectedId === l.id ? '#2563EB' : '#E1E3E8') }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {l.logoUrl ? (
                   <img src={l.logoUrl} alt="" style={{ width: 22, height: 22, objectFit: 'cover', borderRadius: 5, border: '1.4px solid #E1E3E8', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
                 ) : (
-                  <TypeIcon size={15} color="#3D7A5C" />
+                  <TypeIcon size={15} color="#2563EB" />
                 )}
                 <span style={{ fontWeight: 600 }}>{l.name}</span>
                 <span className="mt-mono muted" style={{ fontSize: 11 }}>{meta.label}</span>
@@ -1189,7 +1189,7 @@ function LocationDetail({ location, products, movements, people, onClose, onAddM
         </div>
         <div>
           <div className="mt-mono muted" style={{ fontSize: 10.5, textTransform: 'uppercase' }}>Recaudado</div>
-          <div className="mt-mono" style={{ fontSize: 16, fontWeight: 600, color: '#3D7A5C' }}>{euro(totalRecaudado)}</div>
+          <div className="mt-mono" style={{ fontSize: 16, fontWeight: 600, color: '#2563EB' }}>{euro(totalRecaudado)}</div>
         </div>
       </div>
 
@@ -1339,7 +1339,7 @@ function TeamMemberCard({ person, count, isOwn, onUpdateAvatar }) {
       {person.avatarUrl ? (
         <img src={person.avatarUrl} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} referrerPolicy="no-referrer" />
       ) : (
-        <User size={15} color="#3D7A5C" />
+        <User size={15} color="#2563EB" />
       )}
       <div>
         <div style={{ fontWeight: 600 }}>{person.name}</div>
@@ -1409,7 +1409,7 @@ function Personas({ teamPeople, manualPeople, movements, onAdd, onRemove, curren
           const count = movements.filter((m) => m.personId === u.id).length;
           return (
             <Card key={u.id} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <User size={15} color="#3D7A5C" />
+              <User size={15} color="#2563EB" />
               <span style={{ fontWeight: 600 }}>{u.name}</span>
               <span className="mt-mono muted" style={{ fontSize: 11 }}>{count} movimiento{count === 1 ? '' : 's'}</span>
               <button onClick={() => onRemove(u.id)} className="icon-btn" style={{ marginLeft: 4 }}><X size={13} /></button>
@@ -1524,7 +1524,7 @@ function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) {
             <Card key={pr.id} style={{ padding: 14, flex: '1 1 220px', display: 'flex', flexDirection: 'column', borderColor: editingId === pr.id ? '#B8791A' : '#E1E3E8' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Truck size={15} color="#3D7A5C" />
+                  <Truck size={15} color="#2563EB" />
                   <div>
                     <span style={{ fontWeight: 700 }}>{pr.name}</span>
                     {pr.type && <div className="mt-mono muted" style={{ fontSize: 11 }}>{pr.type}</div>}
@@ -1568,29 +1568,29 @@ const baseStyles = `
   .mt-table td { padding: 11px 14px; border-bottom: 1px solid #F3F4F6; }
   .mt-table tr:last-child td { border-bottom: none; }
   .mt-input { box-sizing: border-box; height: 38px; border: 1px solid #E1E3E8; background: #FFFFFF; border-radius: 9px; padding: 0 10px; font-size: 13px; font-family: 'Poppins', sans-serif; color: #16181D; }
-  .mt-input:focus { outline: 2px solid #3D7A5C; outline-offset: 1px; }
+  .mt-input:focus { outline: 2px solid #2563EB; outline-offset: 1px; }
 
   .mt-select { position: relative; font-family: 'Poppins', sans-serif; }
   .mt-select-field { box-sizing: border-box; width: 100%; height: 38px; border: 1px solid #E1E3E8; background: #FFFFFF; border-radius: 9px; padding: 0 10px; font-size: 13px; color: #16181D; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .mt-select-field:hover { border-color: #C7CBD3; }
-  .mt-select-field.open { border-color: #3D7A5C; box-shadow: 0 0 0 2px rgba(61,122,92,0.15); }
+  .mt-select-field.open { border-color: #2563EB; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
   .mt-select-field:focus { outline: none; }
-  .mt-select-field:focus-visible { outline: 2px solid #3D7A5C; outline-offset: 1px; }
+  .mt-select-field:focus-visible { outline: 2px solid #2563EB; outline-offset: 1px; }
   .mt-select-field.disabled { cursor: not-allowed; opacity: 0.55; }
   .mt-select-chev { color: #9CA3AF; flex-shrink: 0; transition: transform .2s ease; }
-  .mt-select-field.open .mt-select-chev { transform: rotate(180deg); color: #3D7A5C; }
+  .mt-select-field.open .mt-select-chev { transform: rotate(180deg); color: #2563EB; }
   .mt-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mt-select-value.placeholder { color: #9CA3AF; }
   .mt-select-panel { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #FFFFFF; border: 1px solid #EDEEF1; border-radius: 11px; box-shadow: 0 8px 24px rgba(16,20,24,0.12), 0 2px 6px rgba(16,20,24,0.06); padding: 5px; z-index: 30; max-height: 240px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
   .mt-select-opt { font-size: 13px; padding: 9px 10px; border-radius: 7px; cursor: pointer; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .mt-select-opt:hover, .mt-select-opt.highlighted { background: #F7F7F8; }
-  .mt-select-opt.selected { background: #E8F2EC; color: #2F6349; font-weight: 600; }
-  .mt-select-opt.selected.highlighted { background: #DCEEE3; }
+  .mt-select-opt.selected { background: #EFF4FF; color: #1D4ED8; font-weight: 600; }
+  .mt-select-opt.selected.highlighted { background: #DCE9FE; }
   .mt-select-opt-label { min-width: 0; white-space: normal; word-break: break-word; line-height: 1.35; }
-  .mt-select-opt .mt-select-check { color: #3D7A5C; opacity: 0; width: 13px; height: 13px; flex-shrink: 0; margin-top: 1px; }
+  .mt-select-opt .mt-select-check { color: #2563EB; opacity: 0; width: 13px; height: 13px; flex-shrink: 0; margin-top: 1px; }
   .mt-select-opt.selected .mt-select-check { opacity: 1; }
-  .mt-btn { position: relative; box-sizing: border-box; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #3D7A5C; color: #FFFFFF; border: none; border-radius: 9px; padding: 0 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Poppins', sans-serif; box-shadow: 0 1px 2px rgba(16,20,24,0.08); transition: background .15s ease, box-shadow .15s ease, transform .1s ease; white-space: nowrap; flex-shrink: 0; }
-  .mt-btn:hover { background: #2F6349; box-shadow: 0 4px 12px rgba(61,122,92,0.28); transform: translateY(-1px); }
+  .mt-btn { position: relative; box-sizing: border-box; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #2563EB; color: #FFFFFF; border: none; border-radius: 9px; padding: 0 16px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Poppins', sans-serif; box-shadow: 0 1px 2px rgba(16,20,24,0.08); transition: background .15s ease, box-shadow .15s ease, transform .1s ease; white-space: nowrap; flex-shrink: 0; }
+  .mt-btn:hover { background: #1D4ED8; box-shadow: 0 4px 12px rgba(37,99,235,0.28); transform: translateY(-1px); }
   .mt-btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(16,20,24,0.08); }
   .icon-btn { background: none; border: none; color: #9CA3AF; cursor: pointer; padding: 8px; display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; border-radius: 8px; }
   .icon-btn:hover { color: #D8493F; background: #F7F7F8; }
