@@ -1,5 +1,5 @@
-import { useState, useEffect, useLayoutEffect, useRef, useId } from 'react';
-import { X, Check, ChevronDown, ImageOff, Upload, Loader2 } from 'lucide-react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useId } from 'react';
+import { X, Check, ChevronDown, ImageOff, Upload, Loader2, AlertTriangle } from 'lucide-react';
 import { uid, uploadToStorage, uploadErrorMessage } from '../lib/helpers';
 
 // --- Componentes compartidos por TODA la app (migrada y sin migrar todavia). ---
@@ -221,4 +221,55 @@ export function ImageUploadField({ value, onChange, label = 'Mockup / imagen', a
       {error && <span className="mt-mono" style={{ fontSize: 10, color: '#D8493F', maxWidth: 160 }}>{error}</span>}
     </Field>
   );
+}
+
+// Movido tal cual desde App.jsx -- lo usan tanto el shell principal (MerchTracker) como
+// pantallas sueltas (Movimientos, Ubicaciones) que necesitan su propia confirmacion
+// (ej. "esto va a dejar stock negativo, confirmas?"). Estilo legacy (.tag-card/.mt-btn)
+// a proposito, mismo criterio que ImageUploadField: es un modal chico y puntual, no hace
+// falta reescribirlo en Tailwind para que una pantalla ya migrada se vea bien.
+export function useConfirmDialog() {
+  const [pending, setPending] = useState(null); // { message }
+  const resolveRef = useRef(null);
+
+  const confirm = useCallback((message) => {
+    return new Promise((resolve) => {
+      resolveRef.current = resolve;
+      setPending({ message });
+    });
+  }, []);
+
+  const answer = (value) => {
+    resolveRef.current?.(value);
+    resolveRef.current = null;
+    setPending(null);
+  };
+
+  const dialog = pending ? (
+    <div
+      onClick={() => answer(false)}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(16,20,24,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="tag-card"
+        style={{ maxWidth: 380, width: '100%', padding: 18 }}
+      >
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 18 }}>
+          <AlertTriangle size={18} color="#D8493F" style={{ flexShrink: 0, marginTop: 1 }} />
+          <p className="mt-mono" style={{ fontSize: 13, lineHeight: 1.5, margin: 0 }}>{pending.message}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={() => answer(false)} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1.4px solid #E1E3E8' }}>
+            Cancelar
+          </button>
+          <button type="button" onClick={() => answer(true)} className="mt-btn" style={{ background: '#D8493F' }}>
+            Confirmar igual
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  return { confirm, dialog };
 }

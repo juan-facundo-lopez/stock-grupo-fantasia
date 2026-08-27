@@ -40,6 +40,7 @@ export default {
         warning: {
           DEFAULT: 'hsl(var(--warning))',
           bg: 'hsl(var(--warning-bg))',
+          border: 'hsl(var(--warning-border))',
         },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
