@@ -28,7 +28,7 @@ const TYPE_META = {
   entrega: { label: 'Entrega a punto de venta', color: '#3E6B8A' },
   venta: { label: 'Venta', color: '#2563EB' },
   fallada: { label: 'Fallada', color: '#D8493F' },
-  regalada: { label: 'Regalada', color: '#B8791A' },
+  regalada: { label: 'Regalada', color: '#EB2563' },
   ingreso: { label: 'Ingreso / restock (compra nueva)', color: '#6B4F8A' },
 };
 
@@ -367,7 +367,7 @@ export default function MerchTracker() {
             <X size={16} />
           </button>
         </div>
-        <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#B8791A' : '#9CA3AF', padding: '0 8px 4px' }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
+        <span className="mt-mono" style={{ fontSize: 10.5, color: saving ? '#EB2563' : '#9CA3AF', padding: '0 8px 4px' }}>{saving ? 'guardando…' : 'guardado ✓'}</span>
         <span className="mt-mono" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px 14px', color: cloudOn ? '#2563EB' : '#9CA3AF' }}>
           {cloudOn ? <Wifi size={11} /> : <WifiOff size={11} />} {cloudOn ? 'compartido (Supabase)' : 'solo local'}
         </span>
@@ -620,19 +620,19 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
     <div>
       {confirmDialog}
       {(noProducts || noLocations) && (
-        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FFF8E8', border: '1px solid #F0D9A8', color: '#8A6416', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16 }}>
+        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FDF2F8', border: '1px solid #FBCFE8', color: '#BE185D', padding: '10px 14px', borderRadius: 12, fontSize: 12.5, marginBottom: 16 }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
           <span style={{ flex: 1, minWidth: 200 }}>
             Todavía no cargaste {noProducts && noLocations ? 'productos ni puntos de venta' : noProducts ? 'productos' : 'puntos de venta'} — hace falta al menos uno de cada uno para poder registrar movimientos.
           </span>
           <span style={{ display: 'flex', gap: 8 }}>
             {noProducts && (
-              <button type="button" onClick={() => onNavigate('productos')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+              <button type="button" onClick={() => onNavigate('productos')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #EB2563', color: '#BE185D', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
                 Ir a Productos
               </button>
             )}
             {noLocations && (
-              <button type="button" onClick={() => onNavigate('ubicaciones')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+              <button type="button" onClick={() => onNavigate('ubicaciones')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #EB2563', color: '#BE185D', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
                 Ir a Puntos de venta
               </button>
             )}
@@ -640,9 +640,9 @@ function Movimientos({ data, people, onAdd, onUpdate, onRemove, onNavigate }) {
         </div>
       )}
 
-      <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#B8791A' : '#E1E3E8' }}>
+      <Card style={{ padding: 16, marginBottom: 20, borderColor: editingId ? '#EB2563' : '#E1E3E8' }}>
         {editingId && (
-          <div className="mt-mono" style={{ fontSize: 11, color: '#B8791A', marginBottom: 10 }}>
+          <div className="mt-mono" style={{ fontSize: 11, color: '#EB2563', marginBottom: 10 }}>
             Editando movimiento existente
           </div>
         )}
@@ -838,20 +838,20 @@ function VentaRapida({ stats, locations, people, movements, onAdd, onUndo, onNav
       )}
 
       {restaurantes.length === 0 ? (
-        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FFF8E8', border: '1px solid #F0D9A8', color: '#8A6416', padding: '10px 14px', borderRadius: 12, fontSize: 12.5 }}>
+        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FDF2F8', border: '1px solid #FBCFE8', color: '#BE185D', padding: '10px 14px', borderRadius: 12, fontSize: 12.5 }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
           <span style={{ flex: 1, minWidth: 200 }}>Todavía no cargaste ningún punto de venta — hace falta al menos uno para poder vender.</span>
-          <button type="button" onClick={() => onNavigate('ubicaciones')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="button" onClick={() => onNavigate('ubicaciones')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #EB2563', color: '#BE185D', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
             Ir a Puntos de venta
           </button>
         </div>
       ) : !locationId ? (
         <p className="muted" style={{ fontSize: 13 }}>Elegí un punto de venta arriba para empezar a vender.</p>
       ) : stats.length === 0 ? (
-        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FFF8E8', border: '1px solid #F0D9A8', color: '#8A6416', padding: '10px 14px', borderRadius: 12, fontSize: 12.5 }}>
+        <div className="mt-mono" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#FDF2F8', border: '1px solid #FBCFE8', color: '#BE185D', padding: '10px 14px', borderRadius: 12, fontSize: 12.5 }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
           <span style={{ flex: 1, minWidth: 200 }}>Todavía no cargaste ningún producto — hace falta al menos uno para poder vender.</span>
-          <button type="button" onClick={() => onNavigate('productos')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #B8791A', color: '#8A6416', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="button" onClick={() => onNavigate('productos')} className="mt-mono" style={{ background: 'transparent', border: '1.4px solid #EB2563', color: '#BE185D', borderRadius: 5, padding: '4px 10px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
             Ir a Productos
           </button>
         </div>
@@ -1009,9 +1009,9 @@ function Ubicaciones({ locations, products, movements, people, onAdd, onUpdate, 
 
   return (
     <div>
-      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 520, borderColor: editingId ? '#B8791A' : '#E1E3E8' }}>
+      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 520, borderColor: editingId ? '#EB2563' : '#E1E3E8' }}>
         {editingId && (
-          <div className="mt-mono" style={{ fontSize: 14, fontWeight: 700, color: '#B8791A', marginBottom: 10 }}>
+          <div className="mt-mono" style={{ fontSize: 14, fontWeight: 700, color: '#EB2563', marginBottom: 10 }}>
             Editando: {form.name || '—'}
           </div>
         )}
@@ -1066,7 +1066,7 @@ function Ubicaciones({ locations, products, movements, people, onAdd, onUpdate, 
             <Card
               key={l.id}
               onClick={() => setSelectedId(l.id === selectedId ? null : l.id)}
-              style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer', borderColor: editingId === l.id ? '#B8791A' : (selectedId === l.id ? '#2563EB' : '#E1E3E8') }}
+              style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer', borderColor: editingId === l.id ? '#EB2563' : (selectedId === l.id ? '#2563EB' : '#E1E3E8') }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {l.logoUrl ? (
@@ -1469,9 +1469,9 @@ function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) {
 
   return (
     <div>
-      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 620, borderColor: editingId ? '#B8791A' : '#E1E3E8' }}>
+      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 620, borderColor: editingId ? '#EB2563' : '#E1E3E8' }}>
         {editingId && (
-          <div className="mt-mono" style={{ fontSize: 14, fontWeight: 700, color: '#B8791A', marginBottom: 10 }}>
+          <div className="mt-mono" style={{ fontSize: 14, fontWeight: 700, color: '#EB2563', marginBottom: 10 }}>
             Editando: {form.name || '—'}
           </div>
         )}
@@ -1521,7 +1521,7 @@ function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) {
         {visibleProviders.map((pr) => {
           const linked = pr._linkedCount;
           return (
-            <Card key={pr.id} style={{ padding: 14, flex: '1 1 220px', display: 'flex', flexDirection: 'column', borderColor: editingId === pr.id ? '#B8791A' : '#E1E3E8' }}>
+            <Card key={pr.id} style={{ padding: 14, flex: '1 1 220px', display: 'flex', flexDirection: 'column', borderColor: editingId === pr.id ? '#EB2563' : '#E1E3E8' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Truck size={15} color="#2563EB" />
