@@ -7,7 +7,8 @@ import { Movimientos } from './components/Movimientos';
 import { VentaRapida } from './components/VentaRapida';
 import { Ubicaciones } from './components/Ubicaciones';
 import { Personas } from './components/Personas';
-import { Card, useConfirmDialog, useConfirmMorph, ConfirmContent, SectionTitle, Field, ListToolbar, Select, ImageUploadField, MapsLink } from './components/shared';
+import { Proveedores } from './components/Proveedores';
+import { Card, useConfirmDialog, useConfirmMorph, ConfirmContent, SectionTitle, Field, ListToolbar, Select, ImageUploadField } from './components/shared';
 import {
   euro, uid, mapsUrl, waUrl, computeStats, hasVariants, variantLabel, fullLabel,
   getVariantStock, getVariantStockDeposito, getProductStock, getProductStockDeposito,
@@ -447,140 +448,6 @@ function NotAuthorizedScreen({ email, onSignOut }) {
           <LogOut size={15} /> Cerrar sesión
         </button>
       </Card>
-    </div>
-  );
-}
-
-const emptyProviderForm = { name: '', type: '', email: '', phone: '', address: '', notes: '' };
-
-const PROVIDER_SORT_OPTIONS = [
-  { value: 'name', label: 'Nombre (A-Z)' },
-  { value: 'linked-desc', label: 'Más productos asociados primero' },
-  { value: 'linked-asc', label: 'Menos productos asociados primero' },
-];
-
-function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) {
-  const [form, setForm] = useState(emptyProviderForm);
-  const [editingId, setEditingId] = useState(null);
-  const [confirmRef, triggerConfirm] = useConfirmMorph();
-  const [query, setQuery] = useState('');
-  const [sortBy, setSortBy] = useState('name');
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!form.name) return;
-    if (editingId) {
-      onUpdate(editingId, form);
-      setEditingId(null);
-    } else {
-      onAdd(form);
-    }
-    triggerConfirm();
-    setForm(emptyProviderForm);
-  };
-
-  const startEdit = (pr) => {
-    setEditingId(pr.id);
-    setForm({ name: pr.name, type: pr.type || '', email: pr.email || '', phone: pr.phone || '', address: pr.address || '', notes: pr.notes || '' });
-  };
-  const cancelEdit = () => {
-    setEditingId(null);
-    setForm(emptyProviderForm);
-  };
-
-  const visibleProviders = providers
-    .map((pr) => ({ ...pr, _linkedCount: products.filter((p) => p.providerId === pr.id).length }))
-    .filter((pr) => pr.name.toLowerCase().includes(query.trim().toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === 'linked-desc') return b._linkedCount - a._linkedCount;
-      if (sortBy === 'linked-asc') return a._linkedCount - b._linkedCount;
-      return a.name.localeCompare(b.name, 'es');
-    });
-
-  return (
-    <div>
-      <Card style={{ padding: 16, marginBottom: 20, maxWidth: 620, borderColor: editingId ? '#EB2563' : '#E1E3E8' }}>
-        {editingId && (
-          <div className="mt-mono" style={{ fontSize: 14, fontWeight: 700, color: '#EB2563', marginBottom: 10 }}>
-            Editando: {form.name || '—'}
-          </div>
-        )}
-        <form onSubmit={submit} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <Field label="Nombre"><input className="mt-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-          <Field label="Tipo">
-            <input className="mt-input" list="tipos-proveedor-existentes" placeholder="ej. imprenta" style={{ width: 130 }} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} />
-            <datalist id="tipos-proveedor-existentes">
-              {[...new Set(providers.map((pr) => pr.type).filter(Boolean))].map((t) => <option key={t} value={t} />)}
-            </datalist>
-          </Field>
-          <Field label="Email"><input className="mt-input" type="email" placeholder="pedidos@proveedor.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Teléfono"><input className="mt-input" style={{ width: 130 }} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-          <Field label="Dirección"><input className="mt-input" placeholder="opcional" style={{ width: 200 }} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
-          <Field label="Notas"><input className="mt-input" placeholder="opcional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
-          <button type="submit" className="mt-btn" ref={confirmRef}>
-            <ConfirmContent>
-              {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar</>}
-            </ConfirmContent>
-          </button>
-          {editingId && (
-            <button type="button" onClick={cancelEdit} className="mt-btn" style={{ background: 'transparent', color: '#6B7280', border: '1.4px solid #E1E3E8' }}>
-              <X size={14} /> Cancelar
-            </button>
-          )}
-        </form>
-      </Card>
-
-      {providers.length > 0 && (
-        <ListToolbar
-          query={query}
-          onQueryChange={setQuery}
-          sortValue={sortBy}
-          onSortChange={setSortBy}
-          sortOptions={PROVIDER_SORT_OPTIONS}
-          placeholder="Buscar proveedor…"
-          resultCount={visibleProviders.length}
-        />
-      )}
-
-      {providers.length > 0 && visibleProviders.length === 0 && (
-        <p className="muted" style={{ fontSize: 13 }}>No se encontraron proveedores para "{query}".</p>
-      )}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-        {providers.length === 0 && <p className="muted" style={{ fontSize: 13 }}>Todavía no hay proveedores cargados.</p>}
-        {visibleProviders.map((pr) => {
-          const linked = pr._linkedCount;
-          return (
-            <Card key={pr.id} style={{ padding: 14, flex: '1 1 220px', display: 'flex', flexDirection: 'column', borderColor: editingId === pr.id ? '#EB2563' : '#E1E3E8' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Truck size={15} color="#2563EB" />
-                  <div>
-                    <span style={{ fontWeight: 700 }}>{pr.name}</span>
-                    {pr.type && <div className="mt-mono muted" style={{ fontSize: 11 }}>{pr.type}</div>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => startEdit(pr)} className="icon-btn"><Pencil size={13} /></button>
-                  <button onClick={() => onRemove(pr.id)} className="icon-btn"><Trash2 size={13} /></button>
-                </div>
-              </div>
-              <div className="perforation" style={{ margin: '10px 0' }} />
-              <div className="mt-mono" style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span>{pr.email || <span className="muted">sin email</span>}</span>
-                {pr.phone && <span className="muted">{pr.phone}</span>}
-                {pr.address && (
-                  <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    {pr.address} <MapsLink address={pr.address} />
-                  </span>
-                )}
-                {pr.notes && <span className="muted" style={{ fontStyle: 'italic' }}>{pr.notes}</span>}
-              </div>
-              <span className="mt-mono muted" style={{ fontSize: 12, marginTop: 'auto', paddingTop: 8 }}>{linked} producto{linked === 1 ? '' : 's'} asociado{linked === 1 ? '' : 's'}</span>
-            </Card>
-          );
-        })}
-      </div>
     </div>
   );
 }
