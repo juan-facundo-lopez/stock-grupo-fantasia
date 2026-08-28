@@ -1,9 +1,9 @@
 import { useId, useState } from 'react';
-import { Plus, Pencil, X, Trash2, Truck } from 'lucide-react';
+import { Plus, Pencil, X, Trash2 } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Sheet } from './ui/sheet';
-import { ListToolbar, MapsLink } from './shared';
+import { ListToolbar, MapsLink, ImageUploadField } from './shared';
 
 // Proveedores migrado a shadcn/ui (preset b2vP1JgrVi). Misma logica/props/handlers que
 // la version anterior en App.jsx, solo cambia el markup/estilos. Tipo/Telefono usan
@@ -12,6 +12,11 @@ import { ListToolbar, MapsLink } from './shared';
 // Edicion (punto 9, extendido a esta pantalla): igual que en Productos, "Editar" abre
 // un panel lateral (Sheet) en vez de resaltar la card + reusar el formulario de alta de
 // arriba -- mismo motivo (contexto perdido + color de aviso que se leia como error).
+//
+// Avatar de proveedor (punto 13): foto opcional (mismo ImageUploadField/bucket que usa
+// Productos para el mockup) con fallback a un circulo de color + inicial del nombre
+// cuando no hay foto -- el color se elige con el selector nativo del navegador
+// (<input type="color">), asi el usuario tiene "cualquier color", no una paleta fija.
 
 function Field({ label, children }) {
   return (
@@ -22,7 +27,7 @@ function Field({ label, children }) {
   );
 }
 
-const emptyProviderForm = { name: '', type: '', email: '', phone: '', address: '', notes: '' };
+const emptyProviderForm = { name: '', type: '', email: '', phone: '', address: '', notes: '', imageUrl: '', avatarColor: '#2563EB' };
 
 const PROVIDER_SORT_OPTIONS = [
   { value: 'name', label: 'Nombre (A-Z)' },
@@ -31,7 +36,7 @@ const PROVIDER_SORT_OPTIONS = [
 ];
 
 function buildProviderPayload(form) {
-  return { name: form.name, type: form.type, email: form.email, phone: form.phone, address: form.address, notes: form.notes };
+  return { name: form.name, type: form.type, email: form.email, phone: form.phone, address: form.address, notes: form.notes, imageUrl: form.imageUrl, avatarColor: form.avatarColor };
 }
 
 // Campos del formulario, compartidos entre el alta (arriba de la lista) y la edicion
@@ -51,6 +56,26 @@ function ProviderFormFields({ form, setFn, providers }) {
       <Field label="Teléfono"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 130 }} value={form.phone} onChange={(e) => setFn((f) => ({ ...f, phone: e.target.value }))} /></Field>
       <Field label="Dirección"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 200 }} placeholder="opcional" value={form.address} onChange={(e) => setFn((f) => ({ ...f, address: e.target.value }))} /></Field>
       <Field label="Notas"><input className="h-9 rounded-md border border-input px-3 text-sm" placeholder="opcional" value={form.notes} onChange={(e) => setFn((f) => ({ ...f, notes: e.target.value }))} /></Field>
+      <ImageUploadField value={form.imageUrl} onChange={(url) => setFn((f) => ({ ...f, imageUrl: url }))} label="Foto de perfil" accept="image/*" />
+      <Field label="Color (si no hay foto)">
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            aria-label="Elegir color del circulo"
+            className="h-9 w-9 rounded-full border border-input cursor-pointer bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-none"
+            value={form.avatarColor || '#2563EB'}
+            onChange={(e) => setFn((f) => ({ ...f, avatarColor: e.target.value }))}
+          />
+          {!form.imageUrl && (
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+              style={{ backgroundColor: form.avatarColor || '#2563EB' }}
+            >
+              {(form.name || '?').trim().charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
+      </Field>
     </>
   );
 }
@@ -72,7 +97,7 @@ export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) 
 
   const startEdit = (pr) => {
     setEditingId(pr.id);
-    setEditForm({ name: pr.name, type: pr.type || '', email: pr.email || '', phone: pr.phone || '', address: pr.address || '', notes: pr.notes || '' });
+    setEditForm({ name: pr.name, type: pr.type || '', email: pr.email || '', phone: pr.phone || '', address: pr.address || '', notes: pr.notes || '', imageUrl: pr.imageUrl || '', avatarColor: pr.avatarColor || '#2563EB' });
   };
   const closeEdit = () => {
     setEditingId(null);
@@ -133,7 +158,16 @@ export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) 
             <Card key={pr.id} className={`p-3.5 flex-1 min-w-[220px] flex flex-col ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2">
-                  <Truck size={15} className="text-primary" />
+                  {pr.imageUrl ? (
+                    <img src={pr.imageUrl} alt="" className="w-[30px] h-[30px] rounded-full object-cover border border-border shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <div
+                      className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0"
+                      style={{ backgroundColor: pr.avatarColor || '#2563EB' }}
+                    >
+                      {(pr.name || '?').trim().charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <span className="font-bold">{pr.name}</span>
                     {pr.type && <div className="text-muted-foreground text-[11px]">{pr.type}</div>}
