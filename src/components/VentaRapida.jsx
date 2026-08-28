@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, Undo2, Minus, Plus, Zap } from 'lucide-react';
+import { AlertTriangle, Minus, Plus, Zap } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Select } from './shared';
+import { Select, useUndoToast } from './shared';
 import { euro, uid, fullLabel, hasVariants } from '../lib/helpers';
 
 // Venta rapida migrado a shadcn/ui (preset b2vP1JgrVi). Misma logica/props/handlers que
@@ -44,7 +44,8 @@ export function VentaRapida({ stats, locations, people, movements, onAdd, onUndo
   const [locationId, setLocationId] = useState(() => localStorage.getItem(QS_LOCATION_KEY) || '');
   const [personId, setPersonId] = useState(() => localStorage.getItem(QS_PERSON_KEY) || '');
   const [qtyByProduct, setQtyByProduct] = useState({});
-  const [flash, setFlash] = useState(null); // { text, movementId }
+  const { showUndo, toast } = useUndoToast();
+  const [errorFlash, setErrorFlash] = useState(null); // sin producto/ubicacion elegidos -- esto no es "deshacible", queda aparte del toast
 
   useEffect(() => {
     if (locationId) localStorage.setItem(QS_LOCATION_KEY, locationId);
@@ -54,10 +55,10 @@ export function VentaRapida({ stats, locations, people, movements, onAdd, onUndo
     else localStorage.removeItem(QS_PERSON_KEY);
   }, [personId]);
   useEffect(() => {
-    if (!flash) return;
-    const t = setTimeout(() => setFlash(null), 4000);
+    if (!errorFlash) return;
+    const t = setTimeout(() => setErrorFlash(null), 4000);
     return () => clearTimeout(t);
-  }, [flash]);
+  }, [errorFlash]);
 
   const today = new Date().toISOString().slice(0, 10);
   const setQty = (key, qty) => setQtyByProduct((q) => ({ ...q, [key]: Math.max(1, qty) }));
@@ -65,7 +66,7 @@ export function VentaRapida({ stats, locations, people, movements, onAdd, onUndo
   // key: para un producto simple es el id del producto; para una variante, el id de la
   // variante puntual (ya es único por sí solo, generado con uid()).
   const registerSale = (product, variant) => {
-    if (!locationId) { setFlash({ text: 'Elegí un punto de venta primero.' }); return; }
+    if (!locationId) { setErrorFlash('Elegí un punto de venta primero.'); return; }
     const key = variant ? variant.id : product.id;
     const qty = qtyByProduct[key] || 1;
     const price = Number((variant?.priceOverride !== '' && variant?.priceOverride != null ? variant.priceOverride : product.price) || 0);
@@ -73,7 +74,7 @@ export function VentaRapida({ stats, locations, people, movements, onAdd, onUndo
     const movementId = uid();
     onAdd({ id: movementId, productId: product.id, variantId: variant ? variant.id : null, locationId, personId, type: 'venta', quantity: qty, amount, date: today, note: '' });
     setQtyByProduct((q) => ({ ...q, [key]: 1 }));
-    setFlash({ text: `Vendido: ${qty} × ${fullLabel(product, variant)} (${euro(amount)})`, movementId });
+    showUndo(`Vendido: ${qty} × ${fullLabel(product, variant)} (${euro(amount)})`, () => onUndo(movementId));
   };
 
   return (
@@ -97,14 +98,11 @@ export function VentaRapida({ stats, locations, people, movements, onAdd, onUndo
         </div>
       </Card>
 
-      {flash && (
-        <div className="flex justify-between items-center gap-2.5 flex-wrap bg-primary-tint border border-[#cfe0fb] text-primary rounded-lg px-3.5 py-2.5 text-[12.5px] mb-4">
-          <span>{flash.text}</span>
-          {flash.movementId && (
-            <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary-tint" onClick={() => { onUndo(flash.movementId); setFlash(null); }}>
-              <Undo2 size={12} /> Deshacer
-            </Button>
-          )}
+      {toast}
+
+      {errorFlash && (
+        <div className="flex justify-between items-center gap-2.5 flex-wrap bg-warning-bg border border-warning-border text-warning rounded-lg px-3.5 py-2.5 text-[12.5px] mb-4">
+          <span>{errorFlash}</span>
         </div>
       )}
 

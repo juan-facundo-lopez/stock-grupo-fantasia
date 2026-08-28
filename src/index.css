@@ -47,3 +47,10 @@ html, body, #root {
   0%, 100% { transform: translateX(0); opacity: 0.55; }
   50% { transform: translateX(3px); opacity: 0.9; }
 }
+
+/* Barrita de tiempo del toast de "Deshacer" (useUndoToast en shared.jsx) -- arranca
+   llena y se va achicando de derecha a izquierda durante los 8s que dura el toast. */
+@keyframes undo-toast-shrink {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}

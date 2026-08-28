@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useId } from 'react';
-import { X, Check, ChevronDown, ImageOff, Upload, Loader2, AlertTriangle, MapPin, MessageCircle } from 'lucide-react';
+import { X, Check, ChevronDown, ImageOff, Upload, Loader2, AlertTriangle, MapPin, MessageCircle, Undo2 } from 'lucide-react';
 import { uid, uploadToStorage, uploadErrorMessage, mapsUrl, waUrl } from '../lib/helpers';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -231,6 +231,45 @@ export function useConfirmDialog() {
   ) : null;
 
   return { confirm, dialog };
+}
+
+// Toast de "Deshacer" reusable (Venta rapida y Movimientos). Dura 8 segundos, con una
+// barrita que se va vaciando para que se note visualmente cuanto tiempo queda -- antes
+// esto vivia duplicado a mano en Venta rapida (4s, sin barra) y no existia en Movimientos.
+const UNDO_TOAST_MS = 8000;
+
+export function useUndoToast() {
+  const [flash, setFlash] = useState(null); // { id, text, onUndo }
+  const timeoutRef = useRef(null);
+
+  const dismiss = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setFlash(null);
+  }, []);
+
+  const showUndo = useCallback((text, onUndo) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const id = uid();
+    setFlash({ id, text, onUndo });
+    timeoutRef.current = setTimeout(() => setFlash((f) => (f && f.id === id ? null : f)), UNDO_TOAST_MS);
+  }, []);
+
+  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
+
+  const toast = flash ? (
+    <div className="relative overflow-hidden flex justify-between items-center gap-2.5 flex-wrap bg-primary-tint border border-[#cfe0fb] text-primary rounded-lg px-3.5 py-2.5 text-[12.5px] mb-4">
+      <span>{flash.text}</span>
+      <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary-tint" onClick={() => { flash.onUndo(); dismiss(); }}>
+        <Undo2 size={12} /> Deshacer
+      </Button>
+      <div
+        key={flash.id}
+        className="absolute left-0 bottom-0 h-[3px] w-full origin-left bg-primary/50 animate-[undo-toast-shrink_8s_linear_forwards]"
+      />
+    </div>
+  ) : null;
+
+  return { showUndo, dismiss, toast };
 }
 
 // Movidos tal cual desde App.jsx. Los usan Ubicaciones.jsx y Proveedores.jsx.
