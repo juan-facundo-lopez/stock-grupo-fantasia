@@ -227,9 +227,10 @@ function ProductFormFields({ form, setFn, providers, categories }) {
   );
 }
 
-function PedirMasButton({ product, provider, lowVariants }) {
+function PedirMasButton({ product, provider, lowVariants, onAddOrder }) {
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState('');
+  const [expectedDate, setExpectedDate] = useState('');
 
   if (!open) {
     return (
@@ -239,30 +240,48 @@ function PedirMasButton({ product, provider, lowVariants }) {
     );
   }
 
+  const registerOrder = () => {
+    if (!onAddOrder || !qty) return;
+    onAddOrder({
+      providerId: provider.id,
+      productId: product.id,
+      quantity: Number(qty),
+      requestedAt: new Date().toISOString().slice(0, 10),
+      expectedDate: expectedDate || null,
+      status: 'pendiente',
+    });
+  };
+
   return (
     <div className="bg-muted border border-dashed border-border rounded-md p-2.5">
       {!provider?.email ? (
         <p className="text-muted-foreground text-[11.5px] m-0">Este producto no tiene proveedor con email cargado. Agregalo en la pestaña Proveedores.</p>
       ) : (
-        <div className="flex gap-1.5 items-end">
+        <div className="flex gap-1.5 items-end flex-wrap">
           <Field label="Cantidad">
             <input className="h-9 w-20 rounded-md border border-input px-2.5 text-sm" type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+          </Field>
+          <Field label="Llega (opcional)">
+            <input className="h-9 rounded-md border border-input px-2.5 text-sm" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
           </Field>
           <a
             className={`inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold no-underline ${qty ? '' : 'opacity-50 pointer-events-none'}`}
             href={buildOrderMailto(product, provider, qty, lowVariants)}
-            onClick={() => setTimeout(() => setOpen(false), 300)}
+            onClick={() => { registerOrder(); setTimeout(() => setOpen(false), 300); }}
           >
             <Mail size={13} /> Abrir mail
           </a>
         </div>
+      )}
+      {provider?.email && (
+        <p className="text-muted-foreground text-[10px] mt-1.5 mb-0">Al abrir el mail, el pedido queda anotado como pendiente en la card de este proveedor (pestaña Proveedores) hasta que lo marques como recibido.</p>
       )}
       <Button type="button" variant="ghost" size="sm" className="mt-1.5" onClick={() => setOpen(false)}>Cancelar</Button>
     </div>
   );
 }
 
-export function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
+export function Productos({ products, stats, providers, onAdd, onUpdate, onRemove, onAddOrder }) {
   const [form, setForm] = useState(emptyProductForm);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
@@ -417,7 +436,7 @@ export function Productos({ products, stats, providers, onAdd, onUpdate, onRemov
                 </div>
                 <div className="text-muted-foreground text-[10px] mt-0.5">({movido} uds movidas × {euro(p.price)})</div>
               </div>
-              {isLow && <div className="mt-2.5"><PedirMasButton product={p} provider={provider} lowVariants={variantAlerts} /></div>}
+              {isLow && <div className="mt-2.5"><PedirMasButton product={p} provider={provider} lowVariants={variantAlerts} onAddOrder={onAddOrder} /></div>}
             </Card>
           );
         })}

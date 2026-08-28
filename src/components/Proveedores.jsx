@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Plus, Pencil, X, Trash2 } from 'lucide-react';
+import { Plus, Pencil, X, Trash2, ChevronDown, Clock } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Sheet } from './ui/sheet';
@@ -17,6 +17,11 @@ import { ListToolbar, MapsLink, ImageUploadField } from './shared';
 // Productos para el mockup) con fallback a un circulo de color + inicial del nombre
 // cuando no hay foto -- el color se elige con el selector nativo del navegador
 // (<input type="color">), asi el usuario tiene "cualquier color", no una paleta fija.
+//
+// Pedidos pendientes: el boton "Pedir mas" de Productos anota un pedido "pendiente" para
+// este proveedor. ProviderOrders (mas abajo) lo muestra en la card, con un boton para
+// marcarlo "recibido" -- no crea un movimiento de entrega solo, eso se sigue cargando a
+// mano en Movimientos.
 
 function Field({ label, children }) {
   return (
@@ -80,7 +85,44 @@ function ProviderFormFields({ form, setFn, providers }) {
   );
 }
 
-export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) {
+function ProviderOrders({ pendingOrders, products, onUpdateOrder }) {
+  const [open, setOpen] = useState(false);
+  if (pendingOrders.length === 0) return null;
+  const today = () => new Date().toISOString().slice(0, 10);
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground bg-transparent border-none cursor-pointer p-0"
+      >
+        <ChevronDown size={13} style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+        <Clock size={12} />
+        {pendingOrders.length} pedido{pendingOrders.length === 1 ? '' : 's'} pendiente{pendingOrders.length === 1 ? '' : 's'}
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1.5 mt-1.5">
+          {pendingOrders.map((o) => {
+            const product = products.find((p) => p.id === o.productId);
+            return (
+              <div key={o.id} className="flex items-center justify-between gap-2 text-[11.5px] bg-muted rounded-md px-2.5 py-1.5">
+                <span>
+                  <span className="font-semibold">{product?.name || 'Producto'}</span> × {o.quantity}
+                  {o.expectedDate && <span className="text-muted-foreground"> · llega {o.expectedDate}</span>}
+                </span>
+                <Button type="button" variant="outline" size="sm" onClick={() => onUpdateOrder(o.id, { status: 'recibido', receivedAt: today() })}>
+                  Marcar recibido
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Proveedores({ providers, products, orders, onAdd, onUpdate, onRemove, onUpdateOrder }) {
   const [form, setForm] = useState(emptyProviderForm);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
@@ -189,6 +231,7 @@ export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) 
                 )}
                 {pr.notes && <span className="text-muted-foreground italic">{pr.notes}</span>}
               </div>
+              <ProviderOrders pendingOrders={(orders || []).filter((o) => o.providerId === pr.id && o.status === 'pendiente')} products={products} onUpdateOrder={onUpdateOrder} />
               <span className="text-muted-foreground text-xs mt-auto pt-2">{linked} producto{linked === 1 ? '' : 's'} asociado{linked === 1 ? '' : 's'}</span>
             </Card>
           );
