@@ -256,16 +256,22 @@ export function useUndoToast() {
 
   useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
 
+  // Fixed al viewport (no en el flujo normal) para que quede visible aunque la pagina
+  // este scrolleada -- antes se renderizaba inline y en pantallas largas (Venta Rapida,
+  // Movimientos) el toast aparecia arriba del todo, fuera de la vista, si el usuario
+  // ya habia scrolleado hacia abajo al hacer la accion.
   const toast = flash ? (
-    <div className="relative overflow-hidden flex justify-between items-center gap-2.5 flex-wrap bg-primary-tint border border-[#cfe0fb] text-primary rounded-lg px-3.5 py-2.5 text-[12.5px] mb-4">
-      <span>{flash.text}</span>
-      <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary-tint" onClick={() => { flash.onUndo(); dismiss(); }}>
-        <Undo2 size={12} /> Deshacer
-      </Button>
-      <div
-        key={flash.id}
-        className="absolute left-0 bottom-0 h-[3px] w-full origin-left bg-primary/50 animate-[undo-toast-shrink_8s_linear_forwards]"
-      />
+    <div className="fixed left-1/2 bottom-4 -translate-x-1/2 z-[170] w-[calc(100%-1.5rem)] max-w-[420px] px-0">
+      <div className="relative overflow-hidden flex justify-between items-center gap-2.5 flex-wrap bg-primary-tint border border-[#cfe0fb] text-primary rounded-lg px-3.5 py-2.5 text-[12.5px] shadow-lg">
+        <span>{flash.text}</span>
+        <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary-tint" onClick={() => { flash.onUndo(); dismiss(); }}>
+          <Undo2 size={12} /> Deshacer
+        </Button>
+        <div
+          key={flash.id}
+          className="absolute left-0 bottom-0 h-[3px] w-full origin-left bg-primary/50 animate-[undo-toast-shrink_8s_linear_forwards]"
+        />
+      </div>
     </div>
   ) : null;
 
