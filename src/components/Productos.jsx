@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Plus, Trash2, Pencil, X, ChevronDown, AlertTriangle, Tags, Mail, ImageOff } from 'lucide-react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Sheet } from './ui/sheet';
 import { ImageUploadField } from './shared';
 import { euro, hasVariants, uid, attributeCombos, generateVariants, buildOrderMailto } from '../lib/helpers';
 
@@ -10,6 +11,15 @@ import { euro, hasVariants, uid, attributeCombos, generateVariants, buildOrderMa
 // la version anterior en App.jsx (incluida la de variantes, punto 7) -- solo cambia el
 // markup/estilos. Field local (igual criterio que en Dashboard.jsx): version propia de
 // esta pantalla ya migrada, no la .mt-* compartida que siguen usando las que faltan.
+//
+// Edicion (punto 9): antes, "Editar" precargaba el mismo formulario de alta (que vive
+// arriba de la lista) y resaltaba ese formulario + la card en el color "warning" del
+// tema -- que en esta paleta es un rosa/rojo bastante saturado, se confunde con "algo
+// esta mal" en vez de "estas editando esto", y ademas obliga a scrollear hasta arriba
+// para llegar al formulario. Ahora "Editar" abre un panel lateral (Sheet) con el mismo
+// formulario ya precargado, sin mover el scroll de la lista. El formulario de alta y el
+// de edicion comparten los mismos campos (ProductFormFields) y los mismos handlers de
+// atributos/variantes (reciben que "setFn" usar), asi no hay dos copias del markup.
 
 function Field({ label, children }) {
   return (
@@ -42,6 +52,34 @@ function sortProductStats(list, sortBy) {
     default:
       return withFlags.sort((a, b) => a.name.localeCompare(b.name, 'es'));
   }
+}
+
+// --- Handlers de atributos/variantes, genericos sobre que setState usar (setForm del
+// alta, o setEditForm del panel de edicion) -- asi no hay que duplicarlos por formulario.
+const addAttribute = (setFn) => setFn((f) => ({ ...f, attributes: [...(f.attributes || []), { name: '', options: [] }] }));
+const updateAttributeName = (setFn, idx, name) => setFn((f) => ({ ...f, attributes: f.attributes.map((a, i) => (i === idx ? { ...a, name } : a)) }));
+const removeAttribute = (setFn, idx) => setFn((f) => ({ ...f, attributes: f.attributes.filter((_, i) => i !== idx) }));
+const addAttributeOption = (setFn, idx, option) => setFn((f) => ({
+  ...f,
+  attributes: f.attributes.map((a, i) => (i === idx && option && !a.options.includes(option) ? { ...a, options: [...a.options, option] } : a)),
+}));
+const removeAttributeOption = (setFn, idx, option) => setFn((f) => ({
+  ...f,
+  attributes: f.attributes.map((a, i) => (i === idx ? { ...a, options: a.options.filter((o) => o !== option) } : a)),
+}));
+const runGenerateVariants = (setFn) => setFn((f) => ({ ...f, variants: generateVariants({ attributes: f.attributes, variants: f.variants }) }));
+const updateVariantField = (setFn, variantId, field, value) => setFn((f) => ({ ...f, variants: f.variants.map((v) => (v.id === variantId ? { ...v, [field]: value } : v)) }));
+const removeVariantRow = (setFn, variantId) => setFn((f) => ({ ...f, variants: f.variants.filter((v) => v.id !== variantId) }));
+
+function buildProductPayload(form) {
+  const cleanAttributes = (form.attributes || []).filter((a) => a.name && (a.options || []).length > 0);
+  return {
+    name: form.name, category: form.category || 'Merch', price: Number(form.price) || 0, invested: Number(form.invested) || 0,
+    initialStock: Number(form.initialStock) || 0, lowStockThreshold: Number(form.lowStockThreshold) || 20,
+    providerId: form.providerId, weight: form.weight, unitsPerPackage: form.unitsPerPackage, mockupUrl: form.mockupUrl,
+    attributes: cleanAttributes,
+    variants: cleanAttributes.length > 0 ? (form.variants || []) : [],
+  };
 }
 
 function AttributesEditor({ attributes, onAdd, onNameChange, onRemove, onAddOption, onRemoveOption }) {
@@ -127,6 +165,68 @@ function VariantsEditor({ attributes, variants, onGenerate, onFieldChange, onRem
   );
 }
 
+// Campos del formulario de producto, compartidos entre el alta (arriba de la lista) y
+// la edicion (dentro del Sheet). `setFn` es el setState a usar (setForm o setEditForm);
+// `categories` son las categorias ya usadas por otros productos, para el datalist.
+function ProductFormFields({ form, setFn, providers, categories }) {
+  const hasVariantsFlag = (form.attributes || []).some((a) => a.name && (a.options || []).length > 0);
+  const datalistId = useId();
+
+  return (
+    <>
+      <Field label="Nombre">
+        <input className="h-9 rounded-md border border-input px-3 text-sm" value={form.name} onChange={(e) => setFn((f) => ({ ...f, name: e.target.value }))} required />
+      </Field>
+      <Field label="Categoría">
+        <input className="h-9 rounded-md border border-input px-3 text-sm" list={datalistId} value={form.category} onChange={(e) => setFn((f) => ({ ...f, category: e.target.value }))} />
+        <datalist id={datalistId}>
+          {categories.map((c) => <option key={c} value={c} />)}
+        </datalist>
+      </Field>
+      <Field label="Precio unit. (€)"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" step="0.01" value={form.price} onChange={(e) => setFn((f) => ({ ...f, price: e.target.value }))} /></Field>
+      <Field label="Invertido (€)"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" step="0.01" value={form.invested} onChange={(e) => setFn((f) => ({ ...f, invested: e.target.value }))} /></Field>
+      {!hasVariantsFlag && (
+        <Field label="Stock inicial"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" value={form.initialStock} onChange={(e) => setFn((f) => ({ ...f, initialStock: e.target.value }))} /></Field>
+      )}
+      <Field label={hasVariantsFlag ? 'Alertar si baja de (default)' : 'Alertar si baja de'}>
+        <input className="h-9 w-[90px] rounded-md border border-input px-3 text-sm" type="number" value={form.lowStockThreshold} onChange={(e) => setFn((f) => ({ ...f, lowStockThreshold: e.target.value }))} />
+      </Field>
+      <Field label="Proveedor">
+        <select className="h-9 w-[160px] rounded-md border border-input px-3 text-sm bg-card" value={form.providerId} onChange={(e) => setFn((f) => ({ ...f, providerId: e.target.value }))}>
+          <option value="">—</option>
+          {providers.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Peso / medida"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" placeholder="ej. 250g" value={form.weight} onChange={(e) => setFn((f) => ({ ...f, weight: e.target.value }))} /></Field>
+      <Field label="Uds. por paquete"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" value={form.unitsPerPackage} onChange={(e) => setFn((f) => ({ ...f, unitsPerPackage: e.target.value }))} /></Field>
+      <ImageUploadField value={form.mockupUrl} onChange={(url) => setFn((f) => ({ ...f, mockupUrl: url }))} />
+
+      <div className="basis-full" />
+      <AttributesEditor
+        attributes={form.attributes || []}
+        onAdd={() => addAttribute(setFn)}
+        onNameChange={(idx, name) => updateAttributeName(setFn, idx, name)}
+        onRemove={(idx) => removeAttribute(setFn, idx)}
+        onAddOption={(idx, opt) => addAttributeOption(setFn, idx, opt)}
+        onRemoveOption={(idx, opt) => removeAttributeOption(setFn, idx, opt)}
+      />
+
+      {hasVariantsFlag && (
+        <>
+          <div className="basis-full" />
+          <VariantsEditor
+            attributes={form.attributes}
+            variants={form.variants || []}
+            onGenerate={() => runGenerateVariants(setFn)}
+            onFieldChange={(id, field, val) => updateVariantField(setFn, id, field, val)}
+            onRemove={(id) => removeVariantRow(setFn, id)}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
 function PedirMasButton({ product, provider, lowVariants }) {
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState('');
@@ -164,63 +264,46 @@ function PedirMasButton({ product, provider, lowVariants }) {
 
 export function Productos({ products, stats, providers, onAdd, onUpdate, onRemove }) {
   const [form, setForm] = useState(emptyProductForm);
-  const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
+  const [expanded, setExpanded] = useState({});
 
-  const formHasVariants = (form.attributes || []).some((a) => a.name && (a.options || []).length > 0);
+  // Edicion: vive separada del formulario de alta (antes eran el mismo estado/form) para
+  // que "Editar" pueda abrir el Sheet sin tocar lo que se este por ahi cargando en el
+  // formulario de arriba.
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(emptyProductForm);
 
-  const submit = (e) => {
+  const categories = [...new Set(products.map((p) => p.category).filter(Boolean))];
+
+  const submitAdd = (e) => {
     e.preventDefault();
     if (!form.name) return;
-    const cleanAttributes = (form.attributes || []).filter((a) => a.name && (a.options || []).length > 0);
-    const payload = {
-      name: form.name, category: form.category || 'Merch', price: Number(form.price) || 0, invested: Number(form.invested) || 0,
-      initialStock: Number(form.initialStock) || 0, lowStockThreshold: Number(form.lowStockThreshold) || 20,
-      providerId: form.providerId, weight: form.weight, unitsPerPackage: form.unitsPerPackage, mockupUrl: form.mockupUrl,
-      attributes: cleanAttributes,
-      variants: cleanAttributes.length > 0 ? (form.variants || []) : [],
-    };
-    if (editingId) {
-      onUpdate(editingId, payload);
-      setEditingId(null);
-    } else {
-      onAdd(payload);
-    }
+    onAdd(buildProductPayload(form));
     setForm(emptyProductForm);
   };
 
   const startEdit = (p) => {
     setEditingId(p.id);
-    setForm({
+    setEditForm({
       name: p.name, category: p.category || 'Merch', price: p.price ? String(p.price) : '', invested: p.invested ? String(p.invested) : '',
       initialStock: p.initialStock ? String(p.initialStock) : '', lowStockThreshold: p.lowStockThreshold ? String(p.lowStockThreshold) : '20',
       providerId: p.providerId || '', weight: p.weight || '', unitsPerPackage: p.unitsPerPackage ? String(p.unitsPerPackage) : '', mockupUrl: p.mockupUrl || '',
       attributes: p.attributes || [], variants: p.variants || [],
     });
   };
-  const cancelEdit = () => {
+  const closeEdit = () => {
     setEditingId(null);
-    setForm(emptyProductForm);
+    setEditForm(emptyProductForm);
+  };
+  const submitEdit = (e) => {
+    e.preventDefault();
+    if (!editForm.name || !editingId) return;
+    onUpdate(editingId, buildProductPayload(editForm));
+    closeEdit();
   };
 
-  const addAttribute = () => setForm((f) => ({ ...f, attributes: [...(f.attributes || []), { name: '', options: [] }] }));
-  const updateAttributeName = (idx, name) => setForm((f) => ({ ...f, attributes: f.attributes.map((a, i) => (i === idx ? { ...a, name } : a)) }));
-  const removeAttribute = (idx) => setForm((f) => ({ ...f, attributes: f.attributes.filter((_, i) => i !== idx) }));
-  const addAttributeOption = (idx, option) => setForm((f) => ({
-    ...f,
-    attributes: f.attributes.map((a, i) => (i === idx && option && !a.options.includes(option) ? { ...a, options: [...a.options, option] } : a)),
-  }));
-  const removeAttributeOption = (idx, option) => setForm((f) => ({
-    ...f,
-    attributes: f.attributes.map((a, i) => (i === idx ? { ...a, options: a.options.filter((o) => o !== option) } : a)),
-  }));
-  const runGenerateVariants = () => setForm((f) => ({ ...f, variants: generateVariants({ attributes: f.attributes, variants: f.variants }) }));
-  const updateVariantField = (variantId, field, value) => setForm((f) => ({ ...f, variants: f.variants.map((v) => (v.id === variantId ? { ...v, [field]: value } : v)) }));
-  const removeVariantRow = (variantId) => setForm((f) => ({ ...f, variants: f.variants.filter((v) => v.id !== variantId) }));
-
   const visibleStats = sortProductStats(stats.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase())), sortBy);
-  const [expanded, setExpanded] = useState({});
 
   return (
     <div className="font-sans">
@@ -229,70 +312,11 @@ export function Productos({ products, stats, providers, onAdd, onUpdate, onRemov
         <p className="m-0 text-[12.5px] text-muted-foreground">Alta, edición y stock de cada producto.</p>
       </div>
 
-      <Card className={`p-4 mb-5 ${editingId ? 'border-warning' : ''}`}>
-        {editingId && (
-          <div className="text-sm font-bold text-warning mb-2.5">
-            Editando: {form.name || '—'}
-          </div>
-        )}
-        <form onSubmit={submit} className="flex gap-2.5 flex-wrap items-end">
-          <Field label="Nombre"><input className="h-9 rounded-md border border-input px-3 text-sm" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-          <Field label="Categoría">
-            <input className="h-9 rounded-md border border-input px-3 text-sm" list="categorias-existentes" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-            <datalist id="categorias-existentes">
-              {[...new Set(products.map((p) => p.category).filter(Boolean))].map((c) => <option key={c} value={c} />)}
-            </datalist>
-          </Field>
-          <Field label="Precio unit. (€)"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
-          <Field label="Invertido (€)"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" step="0.01" value={form.invested} onChange={(e) => setForm({ ...form, invested: e.target.value })} /></Field>
-          {!formHasVariants && (
-            <Field label="Stock inicial"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} /></Field>
-          )}
-          <Field label={formHasVariants ? 'Alertar si baja de (default)' : 'Alertar si baja de'}>
-            <input className="h-9 w-[90px] rounded-md border border-input px-3 text-sm" type="number" value={form.lowStockThreshold} onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })} />
-          </Field>
-          <Field label="Proveedor">
-            <select className="h-9 w-[160px] rounded-md border border-input px-3 text-sm bg-card" value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })}>
-              <option value="">—</option>
-              {providers.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Peso / medida"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" placeholder="ej. 250g" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></Field>
-          <Field label="Uds. por paquete"><input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" value={form.unitsPerPackage} onChange={(e) => setForm({ ...form, unitsPerPackage: e.target.value })} /></Field>
-          <ImageUploadField value={form.mockupUrl} onChange={(url) => setForm({ ...form, mockupUrl: url })} />
-
+      <Card className="p-4 mb-5">
+        <form onSubmit={submitAdd} className="flex gap-2.5 flex-wrap items-end">
+          <ProductFormFields form={form} setFn={setForm} providers={providers} categories={categories} />
           <div className="basis-full" />
-          <AttributesEditor
-            attributes={form.attributes || []}
-            onAdd={addAttribute}
-            onNameChange={updateAttributeName}
-            onRemove={removeAttribute}
-            onAddOption={addAttributeOption}
-            onRemoveOption={removeAttributeOption}
-          />
-
-          {formHasVariants && (
-            <>
-              <div className="basis-full" />
-              <VariantsEditor
-                attributes={form.attributes}
-                variants={form.variants || []}
-                onGenerate={runGenerateVariants}
-                onFieldChange={updateVariantField}
-                onRemove={removeVariantRow}
-              />
-            </>
-          )}
-
-          <div className="basis-full" />
-          <Button type="submit">
-            {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar</>}
-          </Button>
-          {editingId && (
-            <Button type="button" variant="outline" onClick={cancelEdit}>
-              <X size={14} /> Cancelar
-            </Button>
-          )}
+          <Button type="submit"><Plus size={14} /> Agregar</Button>
         </form>
       </Card>
 
@@ -322,8 +346,9 @@ export function Productos({ products, stats, providers, onAdd, onUpdate, onRemov
           const movido = Math.max(0, Number(p.initialStock) - p.stockActual);
           const revenueEstimado = movido * Number(p.price || 0);
           const provider = providers.find((pr) => pr.id === p.providerId);
+          const isEditing = editingId === p.id;
           return (
-            <Card key={p.id} className={`p-[15px] flex-1 min-w-[240px] max-w-[300px] flex flex-col ${editingId === p.id ? 'border-warning' : isLow ? 'border-destructive' : ''}`}>
+            <Card key={p.id} className={`p-[15px] flex-1 min-w-[240px] max-w-[300px] flex flex-col ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : isLow ? 'border-destructive' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex gap-2">
                   {p.mockupUrl ? (
@@ -397,6 +422,22 @@ export function Productos({ products, stats, providers, onAdd, onUpdate, onRemov
           );
         })}
       </div>
+
+      <Sheet
+        open={!!editingId}
+        onClose={closeEdit}
+        title={editForm.name ? `Editando: ${editForm.name}` : 'Editar producto'}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={closeEdit}><X size={14} /> Cancelar</Button>
+            <Button type="submit" form="edit-product-form"><Pencil size={14} /> Guardar cambios</Button>
+          </>
+        }
+      >
+        <form id="edit-product-form" onSubmit={submitEdit} className="flex gap-2.5 flex-wrap items-end">
+          <ProductFormFields form={editForm} setFn={setEditForm} providers={providers} categories={categories} />
+        </form>
+      </Sheet>
     </div>
   );
 }
