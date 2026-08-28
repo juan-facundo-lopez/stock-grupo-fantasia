@@ -346,7 +346,7 @@ export function Ubicaciones({ locations, products, movements, people, typeMeta, 
             <Card
               key={l.id}
               onClick={() => setSelectedId(l.id === selectedId ? null : l.id)}
-              className={`px-4 py-2.5 flex flex-col gap-1 cursor-pointer ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : selectedId === l.id ? 'border-primary' : ''}`}
+              className={`px-4 py-2.5 flex flex-col gap-1 cursor-pointer max-[640px]:w-full ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : selectedId === l.id ? 'border-primary' : ''}`}
             >
               <div className="flex items-center gap-2.5">
                 {l.logoUrl ? (
