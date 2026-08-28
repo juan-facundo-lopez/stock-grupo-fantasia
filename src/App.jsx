@@ -25,6 +25,7 @@ const seedData = {
   locations: [],
   people: [],
   movements: [],
+  orders: [],
 };
 
 const TYPE_META = {
@@ -288,6 +289,7 @@ export default function MerchTracker() {
     persist({ ...data, locations: data.locations.filter((l) => l.id !== id) });
   };
   const addPerson = (person) => persist({ ...data, people: [...(data.people || []), { ...person, id: uid() }] });
+  const updatePerson = (id, updates) => persist({ ...data, people: (data.people || []).map((p) => (p.id === id ? { ...p, ...updates } : p)) });
   const removePerson = async (id) => {
     if (!(await askConfirm('¿Eliminar esta persona del equipo?'))) return;
     persist({ ...data, people: (data.people || []).filter((u) => u.id !== id) });
@@ -298,6 +300,12 @@ export default function MerchTracker() {
     if (!(await askConfirm('¿Eliminar este proveedor?'))) return;
     persist({ ...data, providers: (data.providers || []).filter((p) => p.id !== id) });
   };
+  // Pedidos a proveedor (boton "Pedir mas" en Productos): se guardan como "pendiente" al
+  // abrir el mail, y quedan visibles en la card del proveedor hasta que se marcan como
+  // recibidos -- no crean un movimiento de "entrega" automaticamente, eso se sigue
+  // cargando a mano en Movimientos como siempre.
+  const addOrder = (order) => persist({ ...data, orders: [...(data.orders || []), { ...order, id: uid() }] });
+  const updateOrder = (id, updates) => persist({ ...data, orders: (data.orders || []).map((o) => (o.id === id ? { ...o, ...updates } : o)) });
   // Si mv ya trae un id (ej. "Venta rápida", que lo necesita al toque para poder deshacer) se respeta; si no, se genera uno.
   const addMovement = (mv) => persist({ ...data, movements: [{ id: uid(), ...mv }, ...data.movements] });
   const updateMovement = (id, updates) => persist({ ...data, movements: data.movements.map((m) => (m.id === id ? { ...m, ...updates } : m)) });
@@ -426,19 +434,19 @@ export default function MerchTracker() {
             <VentaRapida stats={stats} locations={data.locations} people={people} movements={data.movements} onAdd={addMovement} onUndo={undoMovement} onNavigate={setTab} />
           )}
           {tab === 'movimientos' && (
-            <Movimientos data={data} people={people} typeMeta={TYPE_META} onAdd={addMovement} onUpdate={updateMovement} onRemove={removeMovement} onNavigate={setTab} />
+            <Movimientos data={data} people={people} typeMeta={TYPE_META} onAdd={addMovement} onUpdate={updateMovement} onRemove={removeMovement} onUndo={undoMovement} onNavigate={setTab} />
           )}
           {tab === 'productos' && (
-            <Productos products={data.products} stats={stats} providers={data.providers || []} onAdd={addProduct} onUpdate={updateProduct} onRemove={removeProduct} />
+            <Productos products={data.products} stats={stats} providers={data.providers || []} onAdd={addProduct} onUpdate={updateProduct} onRemove={removeProduct} onAddOrder={addOrder} />
           )}
           {tab === 'ubicaciones' && (
             <Ubicaciones locations={data.locations} products={data.products} movements={data.movements} people={people} typeMeta={TYPE_META} onAdd={addLocation} onUpdate={updateLocation} onRemove={removeLocation} onAddMovement={addMovement} onUpdateMovement={updateMovement} onRemoveMovement={removeMovement} />
           )}
           {tab === 'personas' && (
-            <Personas teamPeople={teamPeople} manualPeople={manualPeople} movements={data.movements} onAdd={addPerson} onRemove={removePerson} currentUserId={session?.user?.id} onUpdateAvatar={updateOwnAvatar} />
+            <Personas teamPeople={teamPeople} manualPeople={manualPeople} movements={data.movements} onAdd={addPerson} onUpdate={updatePerson} onRemove={removePerson} currentUserId={session?.user?.id} onUpdateAvatar={updateOwnAvatar} />
           )}
           {tab === 'proveedores' && (
-            <Proveedores providers={data.providers || []} products={data.products} onAdd={addProvider} onUpdate={updateProvider} onRemove={removeProvider} />
+            <Proveedores providers={data.providers || []} products={data.products} orders={data.orders || []} onAdd={addProvider} onUpdate={updateProvider} onRemove={removeProvider} onUpdateOrder={updateOrder} />
           )}
         </main>
       </div>
