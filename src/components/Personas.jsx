@@ -49,30 +49,36 @@ function TeamMemberCard({ person, count, isOwn, onUpdateAvatar }) {
   };
 
   return (
-    <Card className="px-4 py-3 flex items-center gap-2.5 flex-wrap">
+    <Card className="px-4 py-3 flex items-center gap-2.5 flex-wrap max-[640px]:w-full">
       {person.avatarUrl ? (
         <img src={person.avatarUrl} alt="" className="w-[26px] h-[26px] rounded-full object-cover shrink-0" onError={(e) => { e.target.style.display = 'none'; }} referrerPolicy="no-referrer" />
       ) : (
-        <User size={15} className="text-primary" />
+        <User size={15} className="text-primary shrink-0" />
       )}
-      <div>
-        <div className="font-semibold">{person.name}</div>
-        {person.email && <div className="text-muted-foreground text-[10.5px]">{person.email}</div>}
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold truncate">{person.name}</div>
+        {person.email && <div className="text-muted-foreground text-[10.5px] truncate">{person.email}</div>}
       </div>
-      <span className="text-muted-foreground text-[11px] ml-1">{count} movimiento{count === 1 ? '' : 's'}</span>
-      {isOwn && (
-        <>
-          <label htmlFor={inputId} title="Cambiar mi foto" className={`inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
-          </label>
-          <input id={inputId} type="file" accept="image/*" onChange={handleFile} className="hidden" disabled={uploading} />
-          {person.hasAvatarOverride && (
-            <Button type="button" variant="icon" size="icon" onClick={revert} title="Volver a la foto de Google" disabled={uploading}>
-              <Undo2 size={13} />
-            </Button>
-          )}
-        </>
-      )}
+      {/* Bloque pegado a la derecha (movimientos + lapiz + deshacer): pinneado con
+          ml-auto para que quede a la misma altura y alineado en todas las cards, sin
+          importar si el nombre/email de esta persona en particular es mas corto o
+          mas largo que el de las demas. */}
+      <div className="flex items-center gap-2 shrink-0 ml-auto">
+        <span className="text-muted-foreground text-[11px] whitespace-nowrap">{count} movimiento{count === 1 ? '' : 's'}</span>
+        {isOwn && (
+          <>
+            <label htmlFor={inputId} title="Cambiar mi foto" className={`inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+              {uploading ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+            </label>
+            <input id={inputId} type="file" accept="image/*" onChange={handleFile} className="hidden" disabled={uploading} />
+            {person.hasAvatarOverride && (
+              <Button type="button" variant="icon" size="icon" onClick={revert} title="Volver a la foto de Google" disabled={uploading}>
+                <Undo2 size={13} />
+              </Button>
+            )}
+          </>
+        )}
+      </div>
       {error && <div className="w-full text-[10px] text-destructive">{error}</div>}
     </Card>
   );
@@ -123,11 +129,13 @@ export function Personas({ teamPeople, manualPeople, movements, onAdd, onRemove,
         {manualPeople.map((u) => {
           const count = movements.filter((m) => m.personId === u.id).length;
           return (
-            <Card key={u.id} className="px-4 py-3 flex items-center gap-2.5">
-              <User size={15} className="text-primary" />
-              <span className="font-semibold">{u.name}</span>
-              <span className="text-muted-foreground text-[11px]">{count} movimiento{count === 1 ? '' : 's'}</span>
-              <Button variant="icon" size="icon" className="ml-1" onClick={() => onRemove(u.id)}><X size={13} /></Button>
+            <Card key={u.id} className="px-4 py-3 flex items-center gap-2.5 max-[640px]:w-full">
+              <User size={15} className="text-primary shrink-0" />
+              <span className="font-semibold truncate min-w-0 flex-1">{u.name}</span>
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                <span className="text-muted-foreground text-[11px] whitespace-nowrap">{count} movimiento{count === 1 ? '' : 's'}</span>
+                <Button variant="icon" size="icon" onClick={() => onRemove(u.id)}><X size={13} /></Button>
+              </div>
             </Card>
           );
         })}

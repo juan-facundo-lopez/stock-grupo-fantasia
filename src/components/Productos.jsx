@@ -348,7 +348,7 @@ export function Productos({ products, stats, providers, onAdd, onUpdate, onRemov
           const provider = providers.find((pr) => pr.id === p.providerId);
           const isEditing = editingId === p.id;
           return (
-            <Card key={p.id} className={`p-[15px] flex-1 min-w-[240px] max-w-[300px] flex flex-col ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : isLow ? 'border-destructive' : ''}`}>
+            <Card key={p.id} className={`p-[15px] flex-1 min-w-[240px] max-w-[300px] max-[640px]:max-w-full flex flex-col ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : isLow ? 'border-destructive' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex gap-2">
                   {p.mockupUrl ? (
