@@ -17,8 +17,19 @@ export function Sheet({ open, onClose, title, footer, widthClassName = 'max-w-[5
   useEffect(() => {
     if (open) {
       setMounted(true);
-      const raf = requestAnimationFrame(() => setVisible(true));
-      return () => cancelAnimationFrame(raf);
+      // Doble rAF a proposito: con uno solo, React a veces pinta el estado inicial
+      // (translate-x-full) y el "visible" en el mismo frame -- la transicion no tiene
+      // de donde partir y el panel aparece de golpe en vez de deslizarse. Con dos
+      // frames, se garantiza un pintado en la posicion de afuera antes de animar hacia
+      // adentro.
+      let raf2;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => setVisible(true));
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2) cancelAnimationFrame(raf2);
+      };
     }
     setVisible(false);
     const t = setTimeout(() => setMounted(false), 220);
