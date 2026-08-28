@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Plus, Pencil, X, Trash2, Truck } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
+import { Sheet } from './ui/sheet';
 import { ListToolbar, MapsLink } from './shared';
 
-// Proveedores migrado a shadcn/ui (preset b2vP1JgrVi). Ultima pantalla del piloto de
-// migracion -- misma logica/props/handlers que la version anterior en App.jsx, solo
-// cambia el markup/estilos. Tipo/Telefono usan <input> nativo (como ya se hacia antes),
-// sin dropdown animado.
+// Proveedores migrado a shadcn/ui (preset b2vP1JgrVi). Misma logica/props/handlers que
+// la version anterior en App.jsx, solo cambia el markup/estilos. Tipo/Telefono usan
+// <input> nativo (como ya se hacia antes), sin dropdown animado.
+//
+// Edicion (punto 9, extendido a esta pantalla): igual que en Productos, "Editar" abre
+// un panel lateral (Sheet) en vez de resaltar la card + reusar el formulario de alta de
+// arriba -- mismo motivo (contexto perdido + color de aviso que se leia como error).
 
 function Field({ label, children }) {
   return (
@@ -26,31 +30,59 @@ const PROVIDER_SORT_OPTIONS = [
   { value: 'linked-asc', label: 'Menos productos asociados primero' },
 ];
 
+function buildProviderPayload(form) {
+  return { name: form.name, type: form.type, email: form.email, phone: form.phone, address: form.address, notes: form.notes };
+}
+
+// Campos del formulario, compartidos entre el alta (arriba de la lista) y la edicion
+// (dentro del Sheet) -- `setFn` es el setState a usar en cada caso.
+function ProviderFormFields({ form, setFn, providers }) {
+  const datalistId = useId();
+  return (
+    <>
+      <Field label="Nombre"><input className="h-9 rounded-md border border-input px-3 text-sm" value={form.name} onChange={(e) => setFn((f) => ({ ...f, name: e.target.value }))} required /></Field>
+      <Field label="Tipo">
+        <input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 130 }} list={datalistId} placeholder="ej. imprenta" value={form.type} onChange={(e) => setFn((f) => ({ ...f, type: e.target.value }))} />
+        <datalist id={datalistId}>
+          {[...new Set(providers.map((pr) => pr.type).filter(Boolean))].map((t) => <option key={t} value={t} />)}
+        </datalist>
+      </Field>
+      <Field label="Email"><input className="h-9 rounded-md border border-input px-3 text-sm" type="email" placeholder="pedidos@proveedor.com" value={form.email} onChange={(e) => setFn((f) => ({ ...f, email: e.target.value }))} /></Field>
+      <Field label="Teléfono"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 130 }} value={form.phone} onChange={(e) => setFn((f) => ({ ...f, phone: e.target.value }))} /></Field>
+      <Field label="Dirección"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 200 }} placeholder="opcional" value={form.address} onChange={(e) => setFn((f) => ({ ...f, address: e.target.value }))} /></Field>
+      <Field label="Notas"><input className="h-9 rounded-md border border-input px-3 text-sm" placeholder="opcional" value={form.notes} onChange={(e) => setFn((f) => ({ ...f, notes: e.target.value }))} /></Field>
+    </>
+  );
+}
+
 export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) {
   const [form, setForm] = useState(emptyProviderForm);
-  const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
 
-  const submit = (e) => {
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(emptyProviderForm);
+
+  const submitAdd = (e) => {
     e.preventDefault();
     if (!form.name) return;
-    if (editingId) {
-      onUpdate(editingId, form);
-      setEditingId(null);
-    } else {
-      onAdd(form);
-    }
+    onAdd(buildProviderPayload(form));
     setForm(emptyProviderForm);
   };
 
   const startEdit = (pr) => {
     setEditingId(pr.id);
-    setForm({ name: pr.name, type: pr.type || '', email: pr.email || '', phone: pr.phone || '', address: pr.address || '', notes: pr.notes || '' });
+    setEditForm({ name: pr.name, type: pr.type || '', email: pr.email || '', phone: pr.phone || '', address: pr.address || '', notes: pr.notes || '' });
   };
-  const cancelEdit = () => {
+  const closeEdit = () => {
     setEditingId(null);
-    setForm(emptyProviderForm);
+    setEditForm(emptyProviderForm);
+  };
+  const submitEdit = (e) => {
+    e.preventDefault();
+    if (!editForm.name || !editingId) return;
+    onUpdate(editingId, buildProviderPayload(editForm));
+    closeEdit();
   };
 
   const visibleProviders = providers
@@ -69,32 +101,10 @@ export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) 
         <p className="m-0 text-[12.5px] text-muted-foreground">Alta y datos de contacto de cada proveedor.</p>
       </div>
 
-      <Card className={`p-4 mb-5 max-w-[620px] ${editingId ? 'border-warning' : ''}`}>
-        {editingId && (
-          <div className="text-sm font-bold text-warning mb-2.5">
-            Editando: {form.name || '—'}
-          </div>
-        )}
-        <form onSubmit={submit} className="flex gap-2.5 flex-wrap items-end">
-          <Field label="Nombre"><input className="h-9 rounded-md border border-input px-3 text-sm" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-          <Field label="Tipo">
-            <input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 130 }} list="tipos-proveedor-existentes" placeholder="ej. imprenta" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} />
-            <datalist id="tipos-proveedor-existentes">
-              {[...new Set(providers.map((pr) => pr.type).filter(Boolean))].map((t) => <option key={t} value={t} />)}
-            </datalist>
-          </Field>
-          <Field label="Email"><input className="h-9 rounded-md border border-input px-3 text-sm" type="email" placeholder="pedidos@proveedor.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Teléfono"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 130 }} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-          <Field label="Dirección"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 200 }} placeholder="opcional" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
-          <Field label="Notas"><input className="h-9 rounded-md border border-input px-3 text-sm" placeholder="opcional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
-          <Button type="submit">
-            {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar</>}
-          </Button>
-          {editingId && (
-            <Button type="button" variant="outline" onClick={cancelEdit}>
-              <X size={14} /> Cancelar
-            </Button>
-          )}
+      <Card className="p-4 mb-5 max-w-[620px]">
+        <form onSubmit={submitAdd} className="flex gap-2.5 flex-wrap items-end">
+          <ProviderFormFields form={form} setFn={setForm} providers={providers} />
+          <Button type="submit"><Plus size={14} /> Agregar</Button>
         </form>
       </Card>
 
@@ -118,8 +128,9 @@ export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) 
         {providers.length === 0 && <p className="text-muted-foreground text-[13px]">Todavía no hay proveedores cargados.</p>}
         {visibleProviders.map((pr) => {
           const linked = pr._linkedCount;
+          const isEditing = editingId === pr.id;
           return (
-            <Card key={pr.id} className={`p-3.5 flex-1 min-w-[220px] flex flex-col ${editingId === pr.id ? 'border-warning' : ''}`}>
+            <Card key={pr.id} className={`p-3.5 flex-1 min-w-[220px] flex flex-col ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : ''}`}>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2">
                   <Truck size={15} className="text-primary" />
@@ -149,6 +160,22 @@ export function Proveedores({ providers, products, onAdd, onUpdate, onRemove }) 
           );
         })}
       </div>
+
+      <Sheet
+        open={!!editingId}
+        onClose={closeEdit}
+        title={editForm.name ? `Editando: ${editForm.name}` : 'Editar proveedor'}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={closeEdit}><X size={14} /> Cancelar</Button>
+            <Button type="submit" form="edit-provider-form"><Pencil size={14} /> Guardar cambios</Button>
+          </>
+        }
+      >
+        <form id="edit-provider-form" onSubmit={submitEdit} className="flex gap-2.5 flex-wrap items-end">
+          <ProviderFormFields form={editForm} setFn={setEditForm} providers={providers} />
+        </form>
+      </Sheet>
     </div>
   );
 }

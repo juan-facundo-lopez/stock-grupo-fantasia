@@ -49,7 +49,7 @@ export function Select({ value, onChange, options, placeholder = 'Seleccionar…
   useEffect(() => {
     if (!open) return;
     const onDocDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
-    const onKeydown = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onKeydown = (e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } };
     document.addEventListener('mousedown', onDocDown, true);
     document.addEventListener('keydown', onKeydown, true);
     return () => {

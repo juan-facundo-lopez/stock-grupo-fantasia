@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Plus, Pencil, X, ChevronDown, Trash2 } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
+import { Sheet } from './ui/sheet';
 import { Select, ListToolbar, ImageUploadField, MapsLink, WhatsAppLink, useConfirmDialog } from './shared';
 import {
   euro, fullLabel, hasVariants, variantLabel, getVariantStock, getVariantStockDeposito,
@@ -12,6 +13,11 @@ import {
 // props/handlers que la version anterior en App.jsx -- solo cambia el markup/estilos.
 // LocationDetail vive en este mismo archivo (solo lo usa Ubicaciones). typeMeta llega
 // como prop (antes era el TYPE_META de modulo en App.jsx).
+//
+// Edicion (punto 9, extendido a esta pantalla): "Editar" abre un panel lateral (Sheet)
+// en vez de resaltar la card + reusar el formulario de alta de arriba. Queda
+// independiente de la seleccion de card (que abre/cierra el LocationDetail de abajo) --
+// se puede tener una card seleccionada y editar otra distinta sin pisarse.
 
 function Field({ label, children }) {
   return (
@@ -28,6 +34,32 @@ const LOCATION_SORT_OPTIONS = [
   { value: 'name', label: 'Nombre (A-Z)' },
   { value: 'type', label: 'Tipo (agrupado)' },
 ];
+
+function buildLocationPayload(form) {
+  return { name: form.name, type: form.type, logoUrl: form.logoUrl, address: form.address, email: form.email, phone: form.phone, phoneCountry: form.phoneCountry };
+}
+
+// Campos del formulario, compartidos entre el alta (arriba de la lista) y la edicion
+// (dentro del Sheet) -- `setFn` es el setState a usar en cada caso.
+function LocationFormFields({ form, setFn }) {
+  return (
+    <>
+      <Field label="Nombre"><input className="h-9 rounded-md border border-input px-3 text-sm" value={form.name} onChange={(e) => setFn((f) => ({ ...f, name: e.target.value }))} required /></Field>
+      <Field label="Tipo">
+        <Select value={form.type} onChange={(v) => setFn((f) => ({ ...f, type: v }))} options={Object.entries(LOCATION_TYPE_META).map(([k, v]) => ({ value: k, label: v.label }))} style={{ width: 150 }} />
+      </Field>
+      <Field label="Email"><input className="h-9 rounded-md border border-input px-3 text-sm" type="email" placeholder="contacto@ejemplo.com" value={form.email} onChange={(e) => setFn((f) => ({ ...f, email: e.target.value }))} /></Field>
+      <Field label="Teléfono / WhatsApp">
+        <div className="flex gap-1.5">
+          <Select value={form.phoneCountry} onChange={(v) => setFn((f) => ({ ...f, phoneCountry: v }))} options={PHONE_COUNTRIES.map((c) => ({ value: c.code, label: c.code || 'Otro' }))} style={{ width: 84 }} />
+          <input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 130 }} placeholder="11 5555-5555" value={form.phone} onChange={(e) => setFn((f) => ({ ...f, phone: e.target.value }))} />
+        </div>
+      </Field>
+      <Field label="Dirección"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 200 }} placeholder="opcional" value={form.address} onChange={(e) => setFn((f) => ({ ...f, address: e.target.value }))} /></Field>
+      <ImageUploadField value={form.logoUrl} onChange={(url) => setFn((f) => ({ ...f, logoUrl: url }))} label="Logo" accept="image/*" />
+    </>
+  );
+}
 
 function LocationDetail({ location, products, movements, people, typeMeta, onClose, onAddMovement, onUpdateMovement, onRemoveMovement }) {
   const lm = movements.filter((m) => m.locationId === location.id);
@@ -234,30 +266,33 @@ function LocationDetail({ location, products, movements, people, typeMeta, onClo
 
 export function Ubicaciones({ locations, products, movements, people, typeMeta, onAdd, onUpdate, onRemove, onAddMovement, onUpdateMovement, onRemoveMovement }) {
   const [form, setForm] = useState(emptyLocationForm);
-  const [editingId, setEditingId] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
 
-  const submit = (e) => {
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(emptyLocationForm);
+
+  const submitAdd = (e) => {
     e.preventDefault();
     if (!form.name) return;
-    if (editingId) {
-      onUpdate(editingId, form);
-      setEditingId(null);
-    } else {
-      onAdd(form);
-    }
+    onAdd(buildLocationPayload(form));
     setForm(emptyLocationForm);
   };
 
   const startEdit = (l) => {
     setEditingId(l.id);
-    setForm({ name: l.name, type: l.type || 'restaurante', logoUrl: l.logoUrl || '', address: l.address || '', email: l.email || '', phone: l.phone || '', phoneCountry: l.phoneCountry || '+54' });
+    setEditForm({ name: l.name, type: l.type || 'restaurante', logoUrl: l.logoUrl || '', address: l.address || '', email: l.email || '', phone: l.phone || '', phoneCountry: l.phoneCountry || '+54' });
   };
-  const cancelEdit = () => {
+  const closeEdit = () => {
     setEditingId(null);
-    setForm(emptyLocationForm);
+    setEditForm(emptyLocationForm);
+  };
+  const submitEdit = (e) => {
+    e.preventDefault();
+    if (!editForm.name || !editingId) return;
+    onUpdate(editingId, buildLocationPayload(editForm));
+    closeEdit();
   };
 
   const selected = locations.find((l) => l.id === selectedId) || null;
@@ -279,34 +314,10 @@ export function Ubicaciones({ locations, products, movements, people, typeMeta, 
         <p className="m-0 text-[12.5px] text-muted-foreground">Alta y detalle de cada punto de venta o almacén.</p>
       </div>
 
-      <Card className={`p-4 mb-5 max-w-[520px] ${editingId ? 'border-warning' : ''}`}>
-        {editingId && (
-          <div className="text-sm font-bold text-warning mb-2.5">
-            Editando: {form.name || '—'}
-          </div>
-        )}
-        <form onSubmit={submit} className="flex gap-2.5 flex-wrap items-end">
-          <Field label="Nombre"><input className="h-9 rounded-md border border-input px-3 text-sm" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-          <Field label="Tipo">
-            <Select value={form.type} onChange={(v) => setForm({ ...form, type: v })} options={Object.entries(LOCATION_TYPE_META).map(([k, v]) => ({ value: k, label: v.label }))} style={{ width: 150 }} />
-          </Field>
-          <Field label="Email"><input className="h-9 rounded-md border border-input px-3 text-sm" type="email" placeholder="contacto@ejemplo.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Teléfono / WhatsApp">
-            <div className="flex gap-1.5">
-              <Select value={form.phoneCountry} onChange={(v) => setForm({ ...form, phoneCountry: v })} options={PHONE_COUNTRIES.map((c) => ({ value: c.code, label: c.code || 'Otro' }))} style={{ width: 84 }} />
-              <input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 130 }} placeholder="11 5555-5555" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-          </Field>
-          <Field label="Dirección"><input className="h-9 rounded-md border border-input px-3 text-sm" style={{ width: 200 }} placeholder="opcional" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
-          <ImageUploadField value={form.logoUrl} onChange={(url) => setForm({ ...form, logoUrl: url })} label="Logo" accept="image/*" />
-          <Button type="submit">
-            {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar</>}
-          </Button>
-          {editingId && (
-            <Button type="button" variant="outline" onClick={cancelEdit}>
-              <X size={14} /> Cancelar
-            </Button>
-          )}
+      <Card className="p-4 mb-5 max-w-[520px]">
+        <form onSubmit={submitAdd} className="flex gap-2.5 flex-wrap items-end">
+          <LocationFormFields form={form} setFn={setForm} />
+          <Button type="submit"><Plus size={14} /> Agregar</Button>
         </form>
       </Card>
 
@@ -330,11 +341,12 @@ export function Ubicaciones({ locations, products, movements, people, typeMeta, 
         {visibleLocations.map((l) => {
           const meta = LOCATION_TYPE_META[l.type] || LOCATION_TYPE_META.restaurante;
           const TypeIcon = meta.icon;
+          const isEditing = editingId === l.id;
           return (
             <Card
               key={l.id}
               onClick={() => setSelectedId(l.id === selectedId ? null : l.id)}
-              className={`px-4 py-2.5 flex flex-col gap-1 cursor-pointer ${editingId === l.id ? 'border-warning' : selectedId === l.id ? 'border-primary' : ''}`}
+              className={`px-4 py-2.5 flex flex-col gap-1 cursor-pointer ${isEditing ? 'border-primary ring-2 ring-[rgba(37,99,235,0.15)]' : selectedId === l.id ? 'border-primary' : ''}`}
             >
               <div className="flex items-center gap-2.5">
                 {l.logoUrl ? (
@@ -373,6 +385,22 @@ export function Ubicaciones({ locations, products, movements, people, typeMeta, 
           onRemoveMovement={onRemoveMovement}
         />
       )}
+
+      <Sheet
+        open={!!editingId}
+        onClose={closeEdit}
+        title={editForm.name ? `Editando: ${editForm.name}` : 'Editar punto de venta'}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={closeEdit}><X size={14} /> Cancelar</Button>
+            <Button type="submit" form="edit-location-form"><Pencil size={14} /> Guardar cambios</Button>
+          </>
+        }
+      >
+        <form id="edit-location-form" onSubmit={submitEdit} className="flex gap-2.5 flex-wrap items-end">
+          <LocationFormFields form={editForm} setFn={setEditForm} />
+        </form>
+      </Sheet>
     </div>
   );
 }
