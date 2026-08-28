@@ -2,13 +2,23 @@ import { useState } from 'react';
 import { Plus, Trash2, Pencil, X, AlertTriangle, Download } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Select, useConfirmDialog } from './shared';
-import { euro, hasVariants, fullLabel, variantLabel, getVariantStock, getVariantStockDeposito, getProductStock, getProductStockDeposito } from '../lib/helpers';
+import { Sheet } from './ui/sheet';
+import { Select, useConfirmDialog, useUndoToast } from './shared';
+import { euro, uid, hasVariants, fullLabel, variantLabel, getVariantStock, getVariantStockDeposito, getProductStock, getProductStockDeposito } from '../lib/helpers';
 
 // Movimientos migrado a shadcn/ui (preset b2vP1JgrVi). Misma logica/props/handlers que
 // la version anterior en App.jsx -- solo cambia el markup/estilos. Field local (mismo
 // criterio que en Dashboard.jsx/Productos.jsx), Select sigue siendo el dropdown animado
 // compartido (./shared) porque se usa en muchos lugares de esta pantalla.
+//
+// Edicion (extendido a esta pantalla, igual criterio que Productos/Proveedores/
+// Ubicaciones en los puntos 9 y 12): "Editar" abre un panel lateral (Sheet) en vez de
+// resaltar la card + reusar el formulario de alta de arriba. La logica de validacion de
+// stock (que compara contra la cantidad anterior cuando se esta editando) se extrajo a
+// buildValidatedPayload() para no duplicarla entre alta y edicion.
+//
+// Deshacer (nuevo): cargar un movimiento nuevo (no editar uno existente) muestra el
+// mismo toast de "Deshacer" que ya tenia Venta rapida (useUndoToast, en shared.jsx).
 
 function Field({ label, children }) {
   return (
@@ -46,66 +56,133 @@ const emptyMovForm = (products, locations, people) => ({
   type: 'venta', quantity: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '',
 });
 
-export function Movimientos({ data, people, typeMeta, onAdd, onUpdate, onRemove, onNavigate }) {
-  const [form, setForm] = useState(() => emptyMovForm(data.products, data.locations, people));
-  const [editingId, setEditingId] = useState(null);
-  const [filters, setFilters] = useState({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' });
-  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
-
+// Campos del formulario, compartidos entre el alta (arriba de la lista) y la edicion
+// (dentro del Sheet) -- `setFn` es el setState a usar en cada caso. needsVariant/
+// selectedProduct se recalculan a partir de `form` en vez de recibirse como props, para
+// no duplicar ese estado derivado entre el formulario de alta y el de edicion.
+function MovementFormFields({ form, setFn, data, people, typeMeta }) {
   const selectedProduct = data.products.find((p) => p.id === form.productId);
   const needsVariant = hasVariants(selectedProduct);
-  const selectedVariant = needsVariant ? (selectedProduct.variants || []).find((v) => v.id === form.variantId) : null;
+  return (
+    <>
+      <Field label="Producto">
+        <Select value={form.productId} onChange={(v) => setFn({ ...form, productId: v, variantId: '' })} options={data.products.map((p) => ({ value: p.id, label: p.name }))} style={{ width: 160 }} />
+      </Field>
+      {needsVariant && (
+        <Field label="Variante">
+          <Select
+            value={form.variantId}
+            onChange={(v) => setFn({ ...form, variantId: v })}
+            options={[
+              { value: '', label: 'Elegir…' },
+              ...selectedProduct.variants.map((v) => ({ value: v.id, label: `${variantLabel(selectedProduct, v)} (stock ${getVariantStock(selectedProduct, v, data.movements)})` })),
+            ]}
+            style={{ width: 200 }}
+          />
+        </Field>
+      )}
+      <Field label="Ubicación">
+        <Select value={form.locationId} onChange={(v) => setFn({ ...form, locationId: v })} options={data.locations.map((l) => ({ value: l.id, label: l.name }))} style={{ width: 160 }} />
+      </Field>
+      <Field label="Quién">
+        <Select value={form.personId} onChange={(v) => setFn({ ...form, personId: v })} options={[{ value: '', label: '—' }, ...people.map((u) => ({ value: u.id, label: u.name }))]} style={{ width: 140 }} />
+      </Field>
+      <Field label="Tipo">
+        <Select value={form.type} onChange={(v) => setFn({ ...form, type: v })} options={Object.entries(typeMeta).map(([k, v]) => ({ value: k, label: v.label }))} style={{ width: 140 }} />
+      </Field>
+      <Field label="Cantidad">
+        <input className="h-9 w-[90px] rounded-md border border-input px-3 text-sm" type="number" min="1" value={form.quantity} onChange={(e) => setFn({ ...form, quantity: e.target.value })} required />
+      </Field>
+      <Field label="Monto (€)">
+        <input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setFn({ ...form, amount: e.target.value })} />
+      </Field>
+      <Field label="Fecha">
+        <input className="h-9 rounded-md border border-input px-3 text-sm" type="date" value={form.date} onChange={(e) => setFn({ ...form, date: e.target.value })} />
+      </Field>
+      <Field label="Nota">
+        <input className="h-9 rounded-md border border-input px-3 text-sm" type="text" placeholder="opcional" value={form.note} onChange={(e) => setFn({ ...form, note: e.target.value })} />
+      </Field>
+    </>
+  );
+}
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.productId || !form.quantity) return;
-    if (needsVariant && !form.variantId) return; // hace falta elegir variante
-    const qty = Number(form.quantity);
-    if (['venta', 'fallada', 'regalada'].includes(form.type)) {
-      const product = data.products.find((p) => p.id === form.productId);
+export function Movimientos({ data, people, typeMeta, onAdd, onUpdate, onRemove, onUndo, onNavigate }) {
+  const [form, setForm] = useState(() => emptyMovForm(data.products, data.locations, people));
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(() => emptyMovForm(data.products, data.locations, people));
+  const [filters, setFilters] = useState({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' });
+  const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
+  const { showUndo, toast } = useUndoToast();
+
+  // Valida stock (con confirmacion si queda negativo) y arma el payload final. Compartido
+  // entre alta y edicion -- `editingMovement` es el movimiento original cuando se esta
+  // editando (para "devolverle" su cantidad anterior antes de comparar contra el stock
+  // actual), o null en el alta. Devuelve null si la validacion no paso o el usuario
+  // canceló el aviso de stock negativo.
+  const buildValidatedPayload = async (rawForm, editingMovement) => {
+    if (!rawForm.productId || !rawForm.quantity) return null;
+    const selectedProduct = data.products.find((p) => p.id === rawForm.productId);
+    const needsVariant = hasVariants(selectedProduct);
+    const selectedVariant = needsVariant ? (selectedProduct.variants || []).find((v) => v.id === rawForm.variantId) : null;
+    if (needsVariant && !rawForm.variantId) return null;
+    const qty = Number(rawForm.quantity);
+    if (['venta', 'fallada', 'regalada'].includes(rawForm.type)) {
+      const product = selectedProduct;
       if (product) {
         let currentStock = needsVariant ? getVariantStock(product, selectedVariant, data.movements) : getProductStock(product, data.movements);
-        if (editingId) {
-          const prev = data.movements.find((m) => m.id === editingId);
-          if (prev && prev.productId === form.productId && (prev.variantId || null) === (form.variantId || null) && ['venta', 'fallada', 'regalada'].includes(prev.type)) currentStock += Number(prev.quantity);
+        if (editingMovement && editingMovement.productId === rawForm.productId && (editingMovement.variantId || null) === (rawForm.variantId || null) && ['venta', 'fallada', 'regalada'].includes(editingMovement.type)) {
+          currentStock += Number(editingMovement.quantity);
         }
         if (qty > currentStock) {
           const ok = await askConfirm(`Ojo: esto va a dejar el stock de "${fullLabel(product, selectedVariant)}" en negativo (quedan ${currentStock}, estás cargando ${qty}). ¿Confirmás igual?`);
-          if (!ok) return;
+          if (!ok) return null;
         }
       }
     }
-    if (form.type === 'entrega') {
-      const product = data.products.find((p) => p.id === form.productId);
+    if (rawForm.type === 'entrega') {
+      const product = selectedProduct;
       if (product) {
         let currentDeposito = needsVariant ? getVariantStockDeposito(product, selectedVariant, data.movements) : getProductStockDeposito(product, data.movements);
-        if (editingId) {
-          const prev = data.movements.find((m) => m.id === editingId);
-          if (prev && prev.productId === form.productId && (prev.variantId || null) === (form.variantId || null) && prev.type === 'entrega') currentDeposito += Number(prev.quantity);
+        if (editingMovement && editingMovement.productId === rawForm.productId && (editingMovement.variantId || null) === (rawForm.variantId || null) && editingMovement.type === 'entrega') {
+          currentDeposito += Number(editingMovement.quantity);
         }
         if (qty > currentDeposito) {
           const ok = await askConfirm(`Ojo: en el depósito quedan ${currentDeposito} de "${fullLabel(product, selectedVariant)}" y estás entregando ${qty}. ¿Confirmás igual?`);
-          if (!ok) return;
+          if (!ok) return null;
         }
       }
     }
-    const payload = { ...form, variantId: needsVariant ? form.variantId : null, quantity: qty, amount: Number(form.amount) || 0 };
-    if (editingId) {
-      onUpdate(editingId, payload);
-      setEditingId(null);
-    } else {
-      onAdd(payload);
-    }
+    return { ...rawForm, variantId: needsVariant ? rawForm.variantId : null, quantity: qty, amount: Number(rawForm.amount) || 0 };
+  };
+
+  const submitAdd = async (e) => {
+    e.preventDefault();
+    const payload = await buildValidatedPayload(form, null);
+    if (!payload) return;
+    const movementId = uid();
+    onAdd({ id: movementId, ...payload });
+    const product = data.products.find((p) => p.id === payload.productId);
+    const variant = product?.variants?.find((v) => v.id === payload.variantId);
+    showUndo(`Registrado: ${typeMeta[payload.type]?.label} — ${fullLabel(product, variant)} ×${payload.quantity}`, () => onUndo(movementId));
     setForm((f) => ({ ...emptyMovForm(data.products, data.locations, people), productId: f.productId, variantId: '', locationId: f.locationId, personId: f.personId, type: f.type }));
   };
 
   const startEdit = (m) => {
     setEditingId(m.id);
-    setForm({ productId: m.productId, variantId: m.variantId || '', locationId: m.locationId, personId: m.personId || '', type: m.type, quantity: String(m.quantity), amount: m.amount ? String(m.amount) : '', date: m.date, note: m.note || '' });
+    setEditForm({ productId: m.productId, variantId: m.variantId || '', locationId: m.locationId, personId: m.personId || '', type: m.type, quantity: String(m.quantity), amount: m.amount ? String(m.amount) : '', date: m.date, note: m.note || '' });
   };
-  const cancelEdit = () => {
+  const closeEdit = () => {
     setEditingId(null);
-    setForm(emptyMovForm(data.products, data.locations, people));
+    setEditForm(emptyMovForm(data.products, data.locations, people));
+  };
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    if (!editingId) return;
+    const editingMovement = data.movements.find((m) => m.id === editingId);
+    const payload = await buildValidatedPayload(editForm, editingMovement);
+    if (!payload) return;
+    onUpdate(editingId, payload);
+    closeEdit();
   };
 
   const filtered = data.movements.filter((m) => {
@@ -120,6 +197,9 @@ export function Movimientos({ data, people, typeMeta, onAdd, onUpdate, onRemove,
   const filtersActive = Object.values(filters).some(Boolean);
   const noProducts = data.products.length === 0;
   const noLocations = data.locations.length === 0;
+
+  const editingProduct = data.products.find((p) => p.id === editForm.productId);
+  const editingVariant = editingProduct?.variants?.find((v) => v.id === editForm.variantId);
 
   return (
     <div className="font-sans">
@@ -151,58 +231,12 @@ export function Movimientos({ data, people, typeMeta, onAdd, onUpdate, onRemove,
         </div>
       )}
 
-      <Card className={`p-4 mb-5 ${editingId ? 'border-warning' : ''}`}>
-        {editingId && (
-          <div className="text-[11px] text-warning mb-2.5 font-semibold">
-            Editando movimiento existente
-          </div>
-        )}
-        <form onSubmit={submit} className="flex gap-2.5 flex-wrap items-end">
-          <Field label="Producto">
-            <Select value={form.productId} onChange={(v) => setForm({ ...form, productId: v, variantId: '' })} options={data.products.map((p) => ({ value: p.id, label: p.name }))} style={{ width: 160 }} />
-          </Field>
-          {needsVariant && (
-            <Field label="Variante">
-              <Select
-                value={form.variantId}
-                onChange={(v) => setForm({ ...form, variantId: v })}
-                options={[
-                  { value: '', label: 'Elegir…' },
-                  ...selectedProduct.variants.map((v) => ({ value: v.id, label: `${variantLabel(selectedProduct, v)} (stock ${getVariantStock(selectedProduct, v, data.movements)})` })),
-                ]}
-                style={{ width: 200 }}
-              />
-            </Field>
-          )}
-          <Field label="Ubicación">
-            <Select value={form.locationId} onChange={(v) => setForm({ ...form, locationId: v })} options={data.locations.map((l) => ({ value: l.id, label: l.name }))} style={{ width: 160 }} />
-          </Field>
-          <Field label="Quién">
-            <Select value={form.personId} onChange={(v) => setForm({ ...form, personId: v })} options={[{ value: '', label: '—' }, ...people.map((u) => ({ value: u.id, label: u.name }))]} style={{ width: 140 }} />
-          </Field>
-          <Field label="Tipo">
-            <Select value={form.type} onChange={(v) => setForm({ ...form, type: v })} options={Object.entries(typeMeta).map(([k, v]) => ({ value: k, label: v.label }))} style={{ width: 140 }} />
-          </Field>
-          <Field label="Cantidad">
-            <input className="h-9 w-[90px] rounded-md border border-input px-3 text-sm" type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
-          </Field>
-          <Field label="Monto (€)">
-            <input className="h-9 w-[100px] rounded-md border border-input px-3 text-sm" type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-          </Field>
-          <Field label="Fecha">
-            <input className="h-9 rounded-md border border-input px-3 text-sm" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-          </Field>
-          <Field label="Nota">
-            <input className="h-9 rounded-md border border-input px-3 text-sm" type="text" placeholder="opcional" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-          </Field>
-          <Button type="submit">
-            {editingId ? <><Pencil size={14} /> Guardar cambios</> : <><Plus size={14} /> Registrar</>}
-          </Button>
-          {editingId && (
-            <Button type="button" variant="outline" onClick={cancelEdit}>
-              <X size={14} /> Cancelar
-            </Button>
-          )}
+      {toast}
+
+      <Card className="p-4 mb-5">
+        <form onSubmit={submitAdd} className="flex gap-2.5 flex-wrap items-end">
+          <MovementFormFields form={form} setFn={setForm} data={data} people={people} typeMeta={typeMeta} />
+          <Button type="submit"><Plus size={14} /> Registrar</Button>
         </form>
       </Card>
 
@@ -277,6 +311,22 @@ export function Movimientos({ data, people, typeMeta, onAdd, onUpdate, onRemove,
           </tbody>
         </table>
       </Card>
+
+      <Sheet
+        open={!!editingId}
+        onClose={closeEdit}
+        title={editingProduct ? `Editando: ${fullLabel(editingProduct, editingVariant)}` : 'Editar movimiento'}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={closeEdit}><X size={14} /> Cancelar</Button>
+            <Button type="submit" form="edit-movement-form"><Pencil size={14} /> Guardar cambios</Button>
+          </>
+        }
+      >
+        <form id="edit-movement-form" onSubmit={submitEdit} className="flex gap-2.5 flex-wrap items-end">
+          <MovementFormFields form={editForm} setFn={setEditForm} data={data} people={people} typeMeta={typeMeta} />
+        </form>
+      </Sheet>
     </div>
   );
 }
