@@ -164,12 +164,12 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
       )}
 
       <SectionTitle>Por producto</SectionTitle>
-      <Card className="relative p-0 overflow-hidden mb-6">
-        {showSwipeHint && (
-          <div className="pointer-events-none absolute right-2 top-3 z-10 text-muted-foreground/60">
-            <ChevronRight size={15} className="animate-[swipe-hint-nudge_1.4s_ease-in-out_infinite]" />
-          </div>
-        )}
+      {showSwipeHint && (
+        <div className="flex justify-end pr-2 mb-1 pointer-events-none">
+          <ChevronRight size={15} className="text-muted-foreground/60 animate-[swipe-hint-nudge_1.4s_ease-in-out_infinite]" />
+        </div>
+      )}
+      <Card className="p-0 overflow-hidden mb-6">
         <div ref={productTableScrollRef} onScroll={onProductTableScroll} className="overflow-x-auto">
         <table className="w-full border-collapse text-[12.5px]">
           <thead>
