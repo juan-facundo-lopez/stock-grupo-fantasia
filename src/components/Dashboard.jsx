@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { AlertTriangle, X, ChevronDown, ImageOff } from 'lucide-react';
+import { useState, useRef, useLayoutEffect } from 'react';
+import { AlertTriangle, X, ChevronDown, ChevronRight, ImageOff } from 'lucide-react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { euro, hasVariants } from '../lib/helpers';
@@ -71,6 +71,14 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
   const [expandedIds, setExpandedIds] = useState({});
   const dateFilterActive = !!(dateFrom || dateTo);
 
+  // Pista de swipe (mobile): la tabla "Por producto" de mas abajo tiene scroll
+  // horizontal (overflow-x-auto) pero sin ninguna senal visual de que se puede
+  // deslizar. showSwipeHint se prende si la tabla realmente desborda el ancho
+  // visible, y se apaga apenas el usuario arranca a scrollear (ya aprendio que se
+  // puede) -- no vuelve a aparecer despues, ni siquiera si vuelve al borde izquierdo.
+  const productTableScrollRef = useRef(null);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
+
   const filteredMovements = dateFilterActive
     ? movements.filter((m) => (!dateFrom || m.date >= dateFrom) && (!dateTo || m.date <= dateTo))
     : movements;
@@ -96,6 +104,20 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
 
   const totalRecaudadoFiltered = dateFilterActive ? filteredStats.reduce((s, p) => s + p.recaudado, 0) : totalRecaudado;
   const totalVendidoFiltered = dateFilterActive ? filteredStats.reduce((s, p) => s + p.vendido, 0) : totalVendido;
+
+  useLayoutEffect(() => {
+    const checkOverflow = () => {
+      const el = productTableScrollRef.current;
+      if (el) setShowSwipeHint(el.scrollWidth > el.clientWidth + 4);
+    };
+    checkOverflow();
+    window.addEventListener('resize', checkOverflow);
+    return () => window.removeEventListener('resize', checkOverflow);
+  }, [filteredStats.length, expandedIds]);
+
+  const onProductTableScroll = (e) => {
+    if (e.currentTarget.scrollLeft > 4) setShowSwipeHint(false);
+  };
 
   return (
     <div className="font-sans">
@@ -142,7 +164,13 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
       )}
 
       <SectionTitle>Por producto</SectionTitle>
-      <Card className="p-0 overflow-x-auto mb-6">
+      <Card className="relative p-0 overflow-hidden mb-6">
+        {showSwipeHint && (
+          <div className="pointer-events-none absolute right-2 top-3 z-10 text-muted-foreground/60">
+            <ChevronRight size={15} className="animate-[swipe-hint-nudge_1.4s_ease-in-out_infinite]" />
+          </div>
+        )}
+        <div ref={productTableScrollRef} onScroll={onProductTableScroll} className="overflow-x-auto">
         <table className="w-full border-collapse text-[12.5px]">
           <thead>
             <tr>
@@ -220,6 +248,7 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
             })}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <SectionTitle>Por punto de venta</SectionTitle>
