@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Loader2, LogIn, ShieldAlert, LogOut, Menu, X, Wifi, WifiOff, User, LayoutGrid, Zap, ListPlus, Package, Store, Users, Truck } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { Dashboard } from './components/Dashboard';
@@ -44,6 +44,25 @@ export default function MerchTracker() {
   const [session, setSession] = useState(undefined); // undefined = verificando, null = sin sesión
   const [authError, setAuthError] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Pastilla animada del menu: mide la posicion/alto del item activo y desliza el
+  // fondo hasta ahi (antes aparecia/desaparecia de golpe en cada item). El rebote
+  // del icono al clickear (mas abajo, en el onClick de cada boton) queda igual --
+  // son dos animaciones independientes, una para el fondo y otra para el icono.
+  const [pillRect, setPillRect] = useState({ top: 0, height: 38 });
+  const menuItemRefs = useRef({});
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  useLayoutEffect(() => {
+    const el = menuItemRefs.current[tab];
+    if (el) setPillRect({ top: el.offsetTop, height: el.offsetHeight });
+  }, [tab, !!data]);
+  useEffect(() => {
+    const onResize = () => {
+      const el = menuItemRefs.current[tab];
+      if (el) setPillRect({ top: el.offsetTop, height: el.offsetHeight });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [tab]);
   const skipNextRealtime = useRef(false);
 
   const cloudOn = !!supabase;
@@ -325,41 +344,53 @@ export default function MerchTracker() {
           {cloudOn ? <Wifi size={11} /> : <WifiOff size={11} />} {cloudOn ? 'compartido (Supabase)' : 'solo local'}
         </span>
         <span className="text-[10px] tracking-[1.5px] text-muted-foreground uppercase font-semibold px-2.5 pb-1.5">Menú</span>
-        {[
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, badge: lowStock.length },
-          { id: 'venta-rapida', label: 'Venta rápida', icon: Zap },
-          { id: 'movimientos', label: 'Movimientos', icon: ListPlus },
-          { id: 'productos', label: 'Productos', icon: Package },
-          { id: 'ubicaciones', label: 'Puntos de venta', icon: Store },
-          { id: 'personas', label: 'Personas', icon: Users },
-          { id: 'proveedores', label: 'Proveedores', icon: Truck },
-        ].map(({ id, label, icon: Icon, badge }) => (
-          <button
-            key={id}
-            onClick={(e) => {
-              const icon = e.currentTarget.querySelector('svg');
-              if (icon) {
-                icon.animate(
-                  [
-                    { transform: 'scale(1)' },
-                    { transform: 'scale(0.75)', offset: 0.35 },
-                    { transform: 'scale(1.18)', offset: 0.65 },
-                    { transform: 'scale(1)' },
-                  ],
-                  { duration: 420, easing: 'cubic-bezier(.34,1.56,.64,1)' }
-                );
-              }
-              setTab(id);
-              setMobileNavOpen(false);
+        <div className="relative flex flex-col gap-0.5">
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 bg-primary-tint rounded-lg pointer-events-none"
+            style={{
+              height: pillRect.height,
+              transform: `translateY(${pillRect.top}px)`,
+              transition: prefersReducedMotion ? 'none' : 'transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1), height 320ms cubic-bezier(0.2, 0.8, 0.2, 1)',
             }}
-            className={`flex items-center gap-2 px-2.5 py-2 text-[13px] border-none rounded-lg cursor-pointer w-full text-left ${tab === id ? 'bg-primary-tint text-primary font-semibold' : 'bg-transparent text-muted-foreground font-medium hover:text-foreground'}`}
-          >
-            <Icon size={15} className={tab === id ? 'text-primary' : 'text-muted-foreground'} /> {label}
-            {!!badge && (
-              <span className="ml-auto bg-destructive-bg text-destructive rounded-full text-[10.5px] px-1.5 py-px font-bold">{badge}</span>
-            )}
-          </button>
-        ))}
+          />
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, badge: lowStock.length },
+            { id: 'venta-rapida', label: 'Venta rápida', icon: Zap },
+            { id: 'movimientos', label: 'Movimientos', icon: ListPlus },
+            { id: 'productos', label: 'Productos', icon: Package },
+            { id: 'ubicaciones', label: 'Puntos de venta', icon: Store },
+            { id: 'personas', label: 'Personas', icon: Users },
+            { id: 'proveedores', label: 'Proveedores', icon: Truck },
+          ].map(({ id, label, icon: Icon, badge }) => (
+            <button
+              key={id}
+              ref={(el) => { menuItemRefs.current[id] = el; }}
+              onClick={(e) => {
+                const icon = e.currentTarget.querySelector('svg');
+                if (icon) {
+                  icon.animate(
+                    [
+                      { transform: 'scale(1)' },
+                      { transform: 'scale(0.75)', offset: 0.35 },
+                      { transform: 'scale(1.18)', offset: 0.65 },
+                      { transform: 'scale(1)' },
+                    ],
+                    { duration: 420, easing: 'cubic-bezier(.34,1.56,.64,1)' }
+                  );
+                }
+                setTab(id);
+                setMobileNavOpen(false);
+              }}
+              className={`relative z-10 flex items-center gap-2 px-2.5 py-2 text-[13px] border-none rounded-lg cursor-pointer w-full text-left transition-colors ${tab === id ? 'text-primary font-semibold' : 'bg-transparent text-muted-foreground font-medium hover:text-foreground'}`}
+            >
+              <Icon size={15} className={tab === id ? 'text-primary' : 'text-muted-foreground'} /> {label}
+              {!!badge && (
+                <span className="ml-auto bg-destructive-bg text-destructive rounded-full text-[10.5px] px-1.5 py-px font-bold">{badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
         {cloudOn && (
           <div className="mt-auto">
             <div className="bg-[#EDEEF1] h-px my-2.5 mx-2" />
