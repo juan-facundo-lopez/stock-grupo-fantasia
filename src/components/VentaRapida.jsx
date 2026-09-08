@@ -21,19 +21,29 @@ function Field({ label, children }) {
 const QS_LOCATION_KEY = 'merch-tracker-qs-location';
 const QS_PERSON_KEY = 'merch-tracker-qs-person';
 
-function VentaRapidaCard({ title, price, stock, qty, onQty, onSell }) {
+const MANY_VARIANTS_THRESHOLD = 4;
+
+function VentaRapidaCard({ title, price, stock, qty, onQty, onSell, variantSelector = null }) {
   const sinStock = stock <= 0;
   return (
-    <Card className="p-3.5 flex-1 min-w-[200px]" style={{ opacity: sinStock ? 0.5 : 1 }}>
+    <Card className="p-3.5 flex-1 min-w-[200px]">
       <div className="font-bold">{title}</div>
-      <div className="text-muted-foreground text-[11px] mb-2.5">{euro(price)} · stock {stock}</div>
+      {variantSelector && <div className="mt-2 mb-2.5">{variantSelector}</div>}
+      <div className={`text-[11px] mb-2.5 ${sinStock ? 'text-orange-700 font-semibold' : 'text-muted-foreground'}`}>
+        {euro(price)} · stock {stock}
+      </div>
       <div className="flex items-center gap-1.5 mb-2.5">
         <Button type="button" variant="icon" size="icon" disabled={sinStock} onClick={() => onQty(qty - 1)}><Minus size={13} /></Button>
         <span className="min-w-[20px] text-center font-bold">{qty}</span>
         <Button type="button" variant="icon" size="icon" disabled={sinStock} onClick={() => onQty(qty + 1)}><Plus size={13} /></Button>
       </div>
-      <Button type="button" disabled={sinStock} onClick={onSell} className="w-full">
-        {sinStock ? 'Sin stock' : <><Zap size={13} /> Vender{qty > 1 ? ` ×${qty}` : ''}</>}
+      <Button
+        type="button"
+        disabled={sinStock}
+        onClick={onSell}
+        className={`w-full ${sinStock ? 'border border-orange-200 bg-orange-50 text-orange-700 shadow-none disabled:opacity-100' : ''}`}
+      >
+        {sinStock ? <><AlertTriangle size={13} /> Sin stock</> : <><Zap size={13} /> Vender{qty > 1 ? ` ×${qty}` : ''}</>}
       </Button>
     </Card>
   );
@@ -44,6 +54,7 @@ export function VentaRapida({ stats, locations, people, movements, onAdd, onUndo
   const [locationId, setLocationId] = useState(() => localStorage.getItem(QS_LOCATION_KEY) || '');
   const [personId, setPersonId] = useState(() => localStorage.getItem(QS_PERSON_KEY) || '');
   const [qtyByProduct, setQtyByProduct] = useState({});
+  const [variantByProduct, setVariantByProduct] = useState({});
   const { showUndo, toast } = useUndoToast();
   const [errorFlash, setErrorFlash] = useState(null); // sin producto/ubicacion elegidos -- esto no es "deshacible", queda aparte del toast
 
@@ -129,6 +140,32 @@ export function VentaRapida({ stats, locations, people, movements, onAdd, onUndo
           {stats.map((p) => {
             if (hasVariants(p)) {
               if ((p.variantStats || []).length === 0) return null;
+              if (p.variantStats.length >= MANY_VARIANTS_THRESHOLD) {
+                const selectedVariantId = variantByProduct[p.id] || p.variantStats[0].id;
+                const selectedVariant = p.variantStats.find((v) => v.id === selectedVariantId) || p.variantStats[0];
+                return (
+                  <div key={p.id} className="flex flex-wrap gap-3">
+                    <VentaRapidaCard
+                      title={p.name}
+                      price={selectedVariant.priceOverride !== '' && selectedVariant.priceOverride != null ? selectedVariant.priceOverride : p.price}
+                      stock={selectedVariant.stockActual}
+                      qty={qtyByProduct[selectedVariant.id] || 1}
+                      onQty={(q) => setQty(selectedVariant.id, q)}
+                      onSell={() => registerSale(p, selectedVariant)}
+                      variantSelector={(
+                        <Field label="Variante">
+                          <Select
+                            value={selectedVariant.id}
+                            onChange={(variantId) => setVariantByProduct((current) => ({ ...current, [p.id]: variantId }))}
+                            options={p.variantStats.map((v) => ({ value: v.id, label: `${v.label} · stock ${v.stockActual}` }))}
+                            style={{ width: '100%' }}
+                          />
+                        </Field>
+                      )}
+                    />
+                  </div>
+                );
+              }
               return (
                 <div key={p.id}>
                   <div className="text-muted-foreground text-[10.5px] tracking-wide uppercase mb-1.5">{p.name}</div>

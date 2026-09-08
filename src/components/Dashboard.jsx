@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from 'react';
-import { AlertTriangle, X, ChevronDown, ChevronRight, ImageOff } from 'lucide-react';
+import { AlertTriangle, X, ChevronDown, ChevronRight, ImageOff, CalendarRange } from 'lucide-react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { euro, hasVariants } from '../lib/helpers';
@@ -68,6 +68,7 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [showDateFilter, setShowDateFilter] = useState(false);
   const [expandedIds, setExpandedIds] = useState({});
   const dateFilterActive = !!(dateFrom || dateTo);
 
@@ -126,25 +127,42 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
         <p className="m-0 text-[12.5px] text-muted-foreground">Estado general de stock y ventas de Grupo Fantasía.</p>
       </div>
 
-      <Card className="p-3 mb-4">
-        <div className="flex gap-2.5 flex-wrap items-end">
-          <Field label="Desde"><input className="h-9 rounded-md border border-input px-3 text-sm" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
-          <Field label="Hasta"><input className="h-9 rounded-md border border-input px-3 text-sm" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
-          {dateFilterActive && (
-            <button
-              onClick={() => { setDateFrom(''); setDateTo(''); }}
-              className="flex items-center gap-1.5 bg-destructive-bg border border-destructive-border text-destructive rounded-md px-3 py-1.5 text-xs font-semibold"
-            >
-              <X size={13} /> Quitar filtro
-            </button>
-          )}
-        </div>
-        {dateFilterActive && (
-          <p className="text-muted-foreground text-[11.5px] mt-2 mb-0">
-            Recaudado, vendido y los desgloses por producto y por punto de venta muestran solo este rango. Stock restante y las alertas de stock bajo siempre reflejan el estado real actual.
-          </p>
+      <div className="mb-4">
+        <button
+          type="button"
+          aria-expanded={showDateFilter}
+          aria-controls="dashboard-date-filter"
+          onClick={() => setShowDateFilter((visible) => !visible)}
+          className={`h-9 inline-flex items-center gap-2 rounded-md border px-3 text-xs font-semibold transition-colors ${dateFilterActive ? 'border-primary/25 bg-primary-tint text-primary' : 'border-input bg-card text-foreground hover:bg-muted'}`}
+        >
+          <CalendarRange size={14} />
+          {dateFilterActive ? 'Período personalizado' : 'Filtrar por fecha'}
+          <ChevronDown size={13} className={`transition-transform ${showDateFilter ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showDateFilter && (
+          <Card id="dashboard-date-filter" className="p-3 mt-2">
+            <div className="flex gap-2.5 flex-wrap items-end">
+              <Field label="Desde"><input className="h-9 rounded-md border border-input px-3 text-sm" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
+              <Field label="Hasta"><input className="h-9 rounded-md border border-input px-3 text-sm" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
+              {dateFilterActive && (
+                <button
+                  type="button"
+                  onClick={() => { setDateFrom(''); setDateTo(''); }}
+                  className="h-9 flex items-center gap-1.5 bg-destructive-bg border border-destructive-border text-destructive rounded-md px-3 text-xs font-semibold"
+                >
+                  <X size={13} /> Quitar filtro
+                </button>
+              )}
+            </div>
+            {dateFilterActive && (
+              <p className="text-muted-foreground text-[11.5px] mt-2 mb-0">
+                Recaudado, vendido y los desgloses por producto y por punto de venta muestran solo este rango. Stock restante y las alertas de stock bajo siempre reflejan el estado real actual.
+              </p>
+            )}
+          </Card>
         )}
-      </Card>
+      </div>
 
       <div className="flex gap-3 flex-wrap mb-5">
         <KpiCard label="Recaudado" value={euro(totalRecaudadoFiltered)} accentClass="text-primary" />

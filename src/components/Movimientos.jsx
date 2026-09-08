@@ -109,6 +109,7 @@ function MovementFormFields({ form, setFn, data, people, typeMeta }) {
 export function Movimientos({ data, people, typeMeta, onAdd, onUpdate, onRemove, onUndo, onNavigate }) {
   const [form, setForm] = useState(() => emptyMovForm(data.products, data.locations, people));
   const [editingId, setEditingId] = useState(null);
+  const [selectedMovementId, setSelectedMovementId] = useState(null);
   const [editForm, setEditForm] = useState(() => emptyMovForm(data.products, data.locations, people));
   const [filters, setFilters] = useState({ productId: '', locationId: '', personId: '', type: '', from: '', to: '' });
   const { confirm: askConfirm, dialog: confirmDialog } = useConfirmDialog();
@@ -290,7 +291,19 @@ export function Movimientos({ data, people, typeMeta, onAdd, onUpdate, onRemove,
               const loc = data.locations.find((l) => l.id === m.locationId);
               const person = people.find((u) => u.id === m.personId);
               return (
-                <tr key={m.id} className={editingId === m.id ? 'bg-muted' : ''}>
+                <tr
+                  key={m.id}
+                  tabIndex={0}
+                  aria-selected={selectedMovementId === m.id}
+                  onClick={() => setSelectedMovementId(m.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedMovementId(m.id);
+                    }
+                  }}
+                  className={`cursor-pointer outline-none transition-colors hover:bg-muted/60 focus-visible:bg-muted ${selectedMovementId === m.id || editingId === m.id ? 'bg-muted' : ''}`}
+                >
                   <td className="text-muted-foreground px-3.5 py-2.5 border-b border-border">{m.date}</td>
                   <td className="font-semibold px-3.5 py-2.5 border-b border-border">{fullLabel(prod, variant)}</td>
                   <td className="px-3.5 py-2.5 border-b border-border">{loc?.name || '—'}</td>
