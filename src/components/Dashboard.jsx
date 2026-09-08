@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from 'react';
-import { AlertTriangle, X, ChevronDown, ChevronRight, ImageOff, CalendarRange } from 'lucide-react';
+import { AlertTriangle, X, ChevronDown, ChevronRight, ImageOff, CalendarRange, Search } from 'lucide-react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { euro, hasVariants } from '../lib/helpers';
@@ -21,6 +21,66 @@ function Field({ label, children }) {
       {children}
     </label>
   );
+}
+
+function normalizeSearch(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function editDistance(a, b) {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    let previous = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const current = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
+      previous = current;
+    }
+  }
+  return row[b.length];
+}
+
+function productSearchScore(product, rawQuery) {
+  const query = normalizeSearch(rawQuery);
+  if (!query) return 0;
+
+  const name = normalizeSearch(product.name);
+  const category = normalizeSearch(product.category);
+  const variants = (product.variantRows || []).map((variant) => normalizeSearch(variant.label));
+  const searchable = [name, category, ...variants].filter(Boolean);
+  const haystack = searchable.join(' ');
+
+  if (name === query) return 0;
+  if (name.startsWith(query)) return 1;
+  if (name.includes(query)) return 2;
+  if (haystack.includes(query)) return 3;
+
+  const words = haystack.split(/[^a-z0-9]+/).filter(Boolean);
+  const queryTokens = query.split(/\s+/).filter(Boolean);
+  let score = 0;
+
+  for (const token of queryTokens) {
+    let tokenScore = Number.POSITIVE_INFINITY;
+    for (const word of words) {
+      if (word === token) tokenScore = Math.min(tokenScore, 0);
+      else if (word.startsWith(token)) tokenScore = Math.min(tokenScore, 1);
+      else if (word.includes(token)) tokenScore = Math.min(tokenScore, 2);
+      else if (token.length >= 3) {
+        const distance = editDistance(token, word);
+        const tolerance = token.length <= 4 ? 1 : 2;
+        if (distance <= tolerance) tokenScore = Math.min(tokenScore, 3 + distance);
+      }
+    }
+    if (!Number.isFinite(tokenScore)) return null;
+    score += tokenScore;
+  }
+
+  return 10 + score;
 }
 
 function KpiCard({ label, value, accentClass = 'text-foreground' }) {
@@ -69,6 +129,7 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showDateFilter, setShowDateFilter] = useState(false);
+  const [productQuery, setProductQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState({});
   const dateFilterActive = !!(dateFrom || dateTo);
 
@@ -105,6 +166,11 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
 
   const totalRecaudadoFiltered = dateFilterActive ? filteredStats.reduce((s, p) => s + p.recaudado, 0) : totalRecaudado;
   const totalVendidoFiltered = dateFilterActive ? filteredStats.reduce((s, p) => s + p.vendido, 0) : totalVendido;
+  const searchedStats = filteredStats
+    .map((product) => ({ product, score: productSearchScore(product, productQuery) }))
+    .filter(({ score }) => score !== null)
+    .sort((a, b) => a.score - b.score || a.product.name.localeCompare(b.product.name, 'es'))
+    .map(({ product }) => product);
 
   useLayoutEffect(() => {
     const checkOverflow = () => {
@@ -114,7 +180,7 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
     checkOverflow();
     window.addEventListener('resize', checkOverflow);
     return () => window.removeEventListener('resize', checkOverflow);
-  }, [filteredStats.length, expandedIds]);
+  }, [searchedStats.length, expandedIds, productQuery]);
 
   const onProductTableScroll = (e) => {
     if (e.currentTarget.scrollLeft > 4) setShowSwipeHint(false);
@@ -182,6 +248,32 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
       )}
 
       <SectionTitle>Por producto</SectionTitle>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-2.5">
+        <div className="relative w-full sm:max-w-[360px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            type="search"
+            value={productQuery}
+            onChange={(e) => setProductQuery(e.target.value)}
+            placeholder="Buscar producto, categoría o variante…"
+            aria-label="Buscar producto, categoría o variante"
+            className="h-9 w-full rounded-md border border-input bg-card pl-9 pr-9 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/15"
+          />
+          {productQuery && (
+            <button
+              type="button"
+              onClick={() => setProductQuery('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
+        <span className="text-[11.5px] text-muted-foreground" aria-live="polite">
+          {searchedStats.length} producto{searchedStats.length === 1 ? '' : 's'}
+        </span>
+      </div>
       {showSwipeHint && (
         <div className="flex justify-end pr-2 mb-1 pointer-events-none">
           <ChevronRight size={15} className="text-muted-foreground/60 animate-[swipe-hint-nudge_1.4s_ease-in-out_infinite]" />
@@ -198,7 +290,15 @@ export function Dashboard({ stats, totalRecaudado, totalVendido, totalInvertido,
             </tr>
           </thead>
           <tbody>
-            {filteredStats.map((p) => {
+            {searchedStats.length === 0 && (
+              <tr>
+                <td colSpan={10} className="px-3.5 py-8 text-center text-muted-foreground">
+                  No encontramos productos parecidos a “{productQuery}”.
+                  <button type="button" onClick={() => setProductQuery('')} className="ml-1.5 font-semibold text-primary hover:underline">Limpiar búsqueda</button>
+                </td>
+              </tr>
+            )}
+            {searchedStats.map((p) => {
               const pct = Number(p.invested) > 0 ? (p.recaudado / Number(p.invested)) * 100 : null;
               const isExpanded = !!expandedIds[p.id];
               return (
